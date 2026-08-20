@@ -30,3 +30,4 @@ dist-ssr
 
 # Supabase CLI temp artifacts
 supabase/.temp/
+.vercel
