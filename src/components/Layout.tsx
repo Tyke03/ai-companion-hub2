@@ -38,7 +38,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="h-5 w-5 text-primary" />
-                <span className="font-display text-lg font-bold">NSFW AI Directory</span>
+                <span className="font-display text-lg font-bold">AI Companion Hub</span>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 A curated directory of AI chatbot platforms, local frontends, and
@@ -53,6 +53,8 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                 <li><Link to="/docs" className="hover:text-primary transition-colors">Documentation</Link></li>
                 <li><Link to="/tools" className="hover:text-primary transition-colors">Tools</Link></li>
                 <li><Link to="/blog" className="hover:text-primary transition-colors">Blog</Link></li>
+                <li><Link to="/compare" className="hover:text-primary transition-colors">Compare</Link></li>
+                <li><Link to="/updates" className="hover:text-primary transition-colors">Updates</Link></li>
                 <li><Link to="/community" className="hover:text-primary transition-colors">Community</Link></li>
               </ul>
             </div>

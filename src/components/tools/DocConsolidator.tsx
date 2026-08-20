@@ -13,6 +13,12 @@ const MAX_CHARS = 32000;
 
 const errMsg = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
+const withTimeout = <T,>(promise: Promise<T>, milliseconds = 15000) =>
+  Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Request timed out after 15 seconds.")), milliseconds)),
+  ]);
+
 export const DocConsolidator = () => {
   const [serviceName, setServiceName] = useState("");
   const [customName, setCustomName] = useState("");
@@ -42,10 +48,13 @@ export const DocConsolidator = () => {
 
     setFetching(true);
     try {
-      const { data, error } = await supabase.functions.invoke("venice-ai", {
-        body: { action: "fetch-url", url: docUrl.trim() },
-      });
-      if (error) throw error;
+      const response = await withTimeout(fetch("/api/fetch-doc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: docUrl.trim() }),
+      }));
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.error || `Fetch failed (${response.status})`);
       if (data?.text) {
         setInputText(data.text);
         toast({
@@ -78,16 +87,18 @@ export const DocConsolidator = () => {
     setResult("");
 
     try {
-      const { data, error } = await supabase.functions.invoke("venice-ai", {
+      const { data, error } = await withTimeout(supabase.functions.invoke("venice-ai", {
         body: {
           action: "consolidate",
           serviceName: effectiveName,
           text: inputText,
         },
-      });
+      }));
 
       if (error) throw error;
-      setResult(data?.result || "No result returned.");
+      const consolidated = data?.result || "No result returned.";
+      setResult(consolidated);
+      toast({ title: "Documentation consolidated", description: "Your markdown guide is ready to review." });
     } catch (err) {
       toast({ title: "Error", description: errMsg(err) || "Failed to process documentation.", variant: "destructive" });
     } finally {

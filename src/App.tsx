@@ -12,6 +12,12 @@ import Blog from "./pages/Blog";
 import BlogPost from "./pages/BlogPost";
 import Community from "./pages/Community";
 import NotFound from "./pages/NotFound";
+import Compare from "./pages/Compare";
+import Updates from "./pages/Updates";
+import LorebookBuilder from "./pages/LorebookBuilder";
+import PersonaBuilder from "./pages/PersonaBuilder";
+import ApiTester from "./pages/ApiTester";
+import Prompts from "./pages/Prompts";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +33,12 @@ const App = () => (
             <Route path="/docs" element={<Documentation />} />
             <Route path="/docs/:slug" element={<PlatformDocs />} />
             <Route path="/tools" element={<Tools />} />
+            <Route path="/tools/lorebook-builder" element={<LorebookBuilder />} />
+            <Route path="/tools/persona-builder" element={<PersonaBuilder />} />
+            <Route path="/tools/api-tester" element={<ApiTester />} />
+            <Route path="/compare" element={<Compare />} />
+            <Route path="/updates" element={<Updates />} />
+            <Route path="/prompts" element={<Prompts />} />
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:id" element={<BlogPost />} />
             <Route path="/community" element={<Community />} />

@@ -23,6 +23,19 @@ const crc32Table = (() => {
   return table;
 })();
 
+function utf8ToBase64(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+function base64ToUtf8(value: string): string {
+  const binary = atob(value);
+  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 function createTextChunk(keyword: string, text: string): Uint8Array {
   const keyBytes = new TextEncoder().encode(keyword);
   const nullByte = new Uint8Array([0]);
@@ -75,7 +88,8 @@ export async function embedCardInPng(
   const bytes = new Uint8Array(arrayBuffer);
 
   const jsonStr = JSON.stringify(cardJson);
-  const base64 = btoa(unescape(encodeURIComponent(jsonStr)));
+  // Character-card PNG metadata stores UTF-8 JSON as base64, not a URI-encoded string.
+  const base64 = utf8ToBase64(jsonStr);
 
   const textChunk = createTextChunk(chunkName, base64);
   const iendOffset = findIendOffset(bytes);
@@ -94,7 +108,9 @@ export async function embedCardInPng(
   return new Blob([result], { type: "image/png" });
 }
 
-export function extractCardFromPng(bytes: Uint8Array): { chunkName: string; data: any } | null {
+export type CardMetadata = Record<string, unknown>;
+
+export function extractCardFromPng(bytes: Uint8Array): { chunkName: "ccv3" | "chara"; data: CardMetadata } | null {
   // Search for tEXt chunks with "ccv3" or "chara" keyword
   for (let i = 8; i < bytes.length - 12; i++) {
     if (
@@ -116,8 +132,9 @@ export function extractCardFromPng(bytes: Uint8Array): { chunkName: string; data
 
       const textData = new TextDecoder().decode(chunkData.slice(nullIdx + 1));
       try {
-        const json = JSON.parse(decodeURIComponent(escape(atob(textData))));
-        return { chunkName: keyword, data: json };
+        const json: unknown = JSON.parse(base64ToUtf8(textData));
+        if (!json || typeof json !== "object" || Array.isArray(json)) continue;
+        return { chunkName: keyword as "ccv3" | "chara", data: json as CardMetadata };
       } catch {
         continue;
       }

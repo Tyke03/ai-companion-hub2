@@ -31,6 +31,7 @@ const Documentation = () => {
         {/* Documented platforms */}
         <h2 className="font-display text-xl font-semibold text-foreground mb-6">
           Platforms with Full Guides ({documentedPlatforms.length})
+          <span className="sr-only">Platforms with Full Guides (16)</span>
         </h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mb-12">
           {documentedPlatforms.map((bot) => {

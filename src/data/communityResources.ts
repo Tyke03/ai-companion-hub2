@@ -55,6 +55,18 @@ export const communityResources: CommunityResource[] = [
     type: "reddit",
     description: "KoboldAI backend discussion — model hosting and API setup.",
   },
+  {
+    name: "r/AICompanions",
+    url: "https://reddit.com/r/AICompanions",
+    type: "reddit",
+    description: "General AI companion discussion, app recommendations, memory systems, and user experiences.",
+  },
+  {
+    name: "r/Replika",
+    url: "https://reddit.com/r/replika",
+    type: "reddit",
+    description: "Replika users discussing product changes, memory, relationship modes, and policy history.",
+  },
   // Discord servers
   {
     name: "SillyTavern Discord",
@@ -67,6 +79,18 @@ export const communityResources: CommunityResource[] = [
     url: "https://discord.gg/chub",
     type: "discord",
     description: "Official Chub.ai server — card sharing, creator feedback, and Venus AI discussion.",
+  },
+  {
+    name: "AICharacterCards Discord",
+    url: "https://discord.com/invite/aicharactercards",
+    type: "discord",
+    description: "Character card creators sharing cards, builder techniques, and feedback across compatible frontends.",
+  },
+  {
+    name: "Kobold Horde Discord",
+    url: "https://discord.gg/koboldai",
+    type: "discord",
+    description: "KoboldAI and Horde users discussing volunteer inference, models, queue behavior, and API usage.",
   },
   // Key sites
   {
@@ -104,7 +128,7 @@ export const communityResources: CommunityResource[] = [
     name: "/aicg/ — AI Chat & Girls",
     url: "https://boards.4channel.org/aicg/",
     type: "forum",
-    description: "The /aicg/ board on 4chan — where a lot of the card-making and model scene gets discussed in real time. Unmoderated; browse at your own discretion.",
+    description: "The /aicg/ (AI Chat & Girls) board on 4chan, covering character cards, roleplay frontends, local models, and image workflows. Unmoderated; browse at your own discretion.",
   },
   // Wikis & Guides
   {

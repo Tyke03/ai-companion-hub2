@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
-import { Users, ExternalLink, Send, Copy, Check } from "lucide-react";
+import { Users, ExternalLink, Send, Copy, Check, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { communityResources as resources, communityTypeLabels as typeLabels, type CommunityResource } from "@/data/communityResources";
+import { supabase } from "@/integrations/supabase/client";
 
 const SUBMIT_EMAIL = "submit@nsfw-ai-directory.example";
 const SUBJECT = "Platform Submission";
+interface CommunityCard { id: string; title: string; description: string; tags: string[]; content_rating: string; card_json: unknown; created_at: string; }
 
 const Community = () => {
   const [subName, setSubName] = useState("");
@@ -16,6 +18,15 @@ const Community = () => {
   const [subCategory, setSubCategory] = useState("");
   const [subNotes, setSubNotes] = useState("");
   const [copied, setCopied] = useState(false);
+  const [galleryCards, setGalleryCards] = useState<CommunityCard[]>([]);
+  const [galleryQuery, setGalleryQuery] = useState("");
+  const [galleryRating, setGalleryRating] = useState<"all" | "SFW" | "NSFW">("all");
+
+  useEffect(() => {
+    if (typeof (supabase as unknown as { from?: unknown }).from !== "function") return;
+    supabase.from("community_cards").select("id,title,description,tags,content_rating,card_json,created_at").order("created_at", { ascending: false }).limit(50)
+      .then(({ data }) => setGalleryCards((data || []) as CommunityCard[]), () => setGalleryCards([]));
+  }, []);
 
   const grouped = {
     reddit: resources.filter((r) => r.type === "reddit"),
@@ -64,6 +75,8 @@ const Community = () => {
       <p className="text-sm text-muted-foreground">{r.description}</p>
     </a>
   );
+
+  const visibleCards = galleryCards.filter((card) => (galleryRating === "all" || card.content_rating === galleryRating) && `${card.title} ${card.description} ${(card.tags || []).join(" ")}`.toLowerCase().includes(galleryQuery.toLowerCase()));
 
   return (
     <Layout>
@@ -121,6 +134,14 @@ const Community = () => {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {grouped.wiki.map(renderCard)}
           </div>
+        </section>
+
+        {/* Community card showcase */}
+        <section className="rounded-xl border border-border bg-card p-6">
+          <h2 className="font-display text-xl font-semibold text-foreground mb-2">Community Card Showcase</h2>
+          <p className="text-sm text-muted-foreground mb-4">Browse cards shared through Supabase. Search and rating filters run against the public gallery; the builder never uploads a card without an explicit share action.</p>
+          <div className="flex flex-wrap gap-2 mb-4"><div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={galleryQuery} onChange={(event) => setGalleryQuery(event.target.value)} placeholder="Search cards or tags" className="pl-9 bg-secondary" /></div>{(["all", "SFW", "NSFW"] as const).map((rating) => <button key={rating} onClick={() => setGalleryRating(rating)} className={`rounded-md border px-3 py-2 text-xs ${galleryRating === rating ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>{rating === "all" ? "All ratings" : rating}</button>)}</div>
+          {visibleCards.length ? <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{visibleCards.map((card) => <article key={card.id} className="rounded-lg border border-border bg-secondary/30 p-4"><div className="flex justify-between gap-2"><h3 className="font-semibold text-foreground">{card.title}</h3><span className="text-xs text-muted-foreground">{card.content_rating}</span></div><p className="mt-1 text-sm text-muted-foreground line-clamp-3">{card.description}</p><div className="mt-2 flex flex-wrap gap-1">{(card.tags || []).map((tag) => <span key={tag} className="rounded bg-background px-2 py-0.5 text-[11px] text-muted-foreground">#{tag}</span>)}</div><a href="/tools" className="mt-3 inline-block text-xs font-medium text-primary hover:underline">Open in Card Builder →</a></article>)}</div> : <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">No shared cards yet. Create one in the Card Builder and share it when publishing is enabled.</p>}
         </section>
 
         {/* Submit a platform */}

@@ -9,14 +9,34 @@ import { ChatbotCard } from "@/components/ChatbotCard";
 import { Layout } from "@/components/Layout";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Helmet } from "react-helmet-async";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 
 const categories: Category[] = ["local", "hosted", "libraries", "companion", "providers", "hybrid"];
-const MAX_COMPARE = 6;
+const MAX_COMPARE = 5;
+
+type FilterKey = "image" | "voice" | "group" | "multimodal" | "foss" | "free" | "byok" | "paid" | "v2" | "v3" | "json" | "native";
+
+const matchesFilter = (bot: Chatbot, filter: FilterKey) => {
+  const text = `${bot.pricing || ""} ${bot.cardFormat || ""} ${bot.description} ${bot.memory || ""}`.toLowerCase();
+  if (filter === "image") return !!bot.hasImageGen;
+  if (filter === "voice") return !!bot.hasVoice;
+  if (filter === "group") return text.includes("group");
+  if (filter === "multimodal") return !!bot.hasImageGen && (!!bot.hasVoice || text.includes("multi-modal"));
+  if (filter === "foss") return /open source|open weights|self-host|free \(open/.test(text);
+  if (filter === "free") return /free|freemium/.test(text);
+  if (filter === "byok") return bot.apiAccess === "open";
+  if (filter === "paid") return /paid|subscription|credit|\$/.test(text);
+  const card = (bot.cardFormat || "").toLowerCase();
+  if (filter === "v2") return card.includes("v2");
+  if (filter === "v3") return card.includes("v3");
+  if (filter === "json") return card.includes("json");
+  if (filter === "native") return card.includes("native");
+  return true;
+};
 
 const apiAccessLabel: Record<string, string> = {
   none: "None",
@@ -26,8 +46,11 @@ const apiAccessLabel: Record<string, string> = {
 
 const Index = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<Category | "all">("all");
+  const [contentFilter, setContentFilter] = useState<"all" | "sfw" | "unfiltered" | "toggleable">("all");
+  const [selectedFilters, setSelectedFilters] = useState<Set<FilterKey>>(new Set());
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
   const [compareOpen, setCompareOpen] = useState(false);
   const debouncedSearch = useDebounce(search, 250);
@@ -65,11 +88,23 @@ const Index = () => {
         (bot.contextWindow || "").toLowerCase().includes(q) ||
         (bot.memory || "").toLowerCase().includes(q) ||
         (bot.knownIssues || "").toLowerCase().includes(q);
-      const matchCategory =
-        activeCategory === "all" || bot.category === activeCategory;
-      return matchSearch && matchCategory;
+      const matchCategory = activeCategory === "all" || bot.category === activeCategory;
+      const matchContent = contentFilter === "all" ||
+        (contentFilter === "sfw" && bot.contentLevel === 1) ||
+        (contentFilter === "toggleable" && bot.contentLevel === 2) ||
+        (contentFilter === "unfiltered" && bot.contentLevel >= 3);
+      const matchAttributes = [...selectedFilters].every((filter) => matchesFilter(bot, filter));
+      return matchSearch && matchCategory && matchContent && matchAttributes;
     });
-  }, [debouncedSearch, activeCategory]);
+  }, [debouncedSearch, activeCategory, contentFilter, selectedFilters]);
+
+  const toggleFilter = (filter: FilterKey) => {
+    setSelectedFilters((previous) => {
+      const next = new Set(previous);
+      if (next.has(filter)) next.delete(filter); else next.add(filter);
+      return next;
+    });
+  };
 
   const compareBots = useMemo(
     () => chatbots.filter((b) => compareSet.has(b.slug)),
@@ -96,10 +131,10 @@ const Index = () => {
   return (
     <Layout>
       <Helmet>
-        <title>NSFW AI Chatbot Directory — 50+ Platforms Compared</title>
+        <title>AI Companion Hub — AI Platforms Compared</title>
         <meta
           name="description"
-          content="Browse and compare 50+ NSFW AI chatbot platforms including SillyTavern, Janitor AI, Character.AI, CrushOn, and more. Filtered by category, access type, and content level."
+          content="Browse and compare AI companion platforms, local frontends, model providers, and creator tools. Filtered by category, access type, features, card specs, and content level."
         />
       </Helmet>
 
@@ -107,10 +142,11 @@ const Index = () => {
       <header className="border-b border-border">
         <div className="container mx-auto px-4 py-8 sm:py-12">
           <h1 className="font-display text-3xl font-bold text-foreground sm:text-5xl glow-text mb-3">
-            NSFW AI Chatbot Directory
+            AI Companion Hub
           </h1>
+          <span className="sr-only">NSFW AI Chatbot Directory</span>
           <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
-            Discover {chatbots.length}+ AI chatbot platforms — from local privacy-first
+            Discover {chatbots.length}+ AI companion platforms — from local privacy-first
             tools to web-based companions. Curated, categorized, and uncensored.
           </p>
         </div>
@@ -156,6 +192,34 @@ const Index = () => {
                 </button>
               );
             })}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium text-muted-foreground">Content:</span>
+            {(["all", "sfw", "unfiltered", "toggleable"] as const).map((value) => (
+              <button key={value} onClick={() => setContentFilter(value)} className={`rounded-md border px-2 py-1 transition-colors ${contentFilter === value ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>
+                {value === "all" ? "All levels" : value === "sfw" ? "SFW only" : value === "unfiltered" ? "Unfiltered / NSFW" : "Toggleable"}
+              </button>
+            ))}
+            <span className="ml-2 font-medium text-muted-foreground">Features:</span>
+            {(["image", "voice", "group", "multimodal"] as FilterKey[]).map((filter) => (
+              <button key={filter} onClick={() => toggleFilter(filter)} className={`rounded-md border px-2 py-1 transition-colors ${selectedFilters.has(filter) ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>
+                {filter === "image" ? "Image" : filter === "voice" ? "Voice/TTS" : filter === "group" ? "Group chat" : "Multi-modal"}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium text-muted-foreground">Access:</span>
+            {(["foss", "free", "byok", "paid"] as FilterKey[]).map((filter) => (
+              <button key={filter} onClick={() => toggleFilter(filter)} className={`rounded-md border px-2 py-1 transition-colors ${selectedFilters.has(filter) ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>
+                {filter === "foss" ? "FOSS" : filter === "free" ? "Free tier" : filter === "byok" ? "BYOK / API" : "Paid"}
+              </button>
+            ))}
+            <span className="ml-2 font-medium text-muted-foreground">Cards:</span>
+            {(["v2", "v3", "json", "native"] as FilterKey[]).map((filter) => (
+              <button key={filter} onClick={() => toggleFilter(filter)} className={`rounded-md border px-2 py-1 transition-colors ${selectedFilters.has(filter) ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>
+                {filter === "native" ? "Platform native" : filter.toUpperCase()}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -206,7 +270,7 @@ const Index = () => {
                 </span>
               ))}
             </div>
-            <Button size="sm" onClick={() => setCompareOpen(true)} disabled={compareBots.length < 2}>
+            <Button size="sm" onClick={() => { setCompareOpen(true); navigate(`/compare?platforms=${compareBots.map((bot) => bot.slug).join(",")}`); }} disabled={compareBots.length < 2}>
               <Scale className="h-4 w-4" />
               Compare ({compareBots.length})
             </Button>

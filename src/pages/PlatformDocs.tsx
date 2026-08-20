@@ -3,7 +3,7 @@ import { Layout } from "@/components/Layout";
 import { platformDocs } from "@/data/documentation";
 import { chatbots, categoryLabels, contentLevelLabels } from "@/data/chatbots";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ExternalLink, Github, ChevronRight, CalendarDays } from "lucide-react";
+import { ArrowLeft, ExternalLink, Github, ChevronRight, CalendarDays, Copy, Check, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const SECTION_LABELS: { id: string; label: string }[] = [
@@ -18,11 +18,19 @@ const SECTION_LABELS: { id: string; label: string }[] = [
   { id: "troubleshooting", label: "Troubleshooting" },
 ];
 
+const CopySnippet = ({ text }: { text: string }) => {
+  const [copied, setCopied] = useState(false);
+  const copy = () => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  return <button onClick={copy} className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:text-primary" aria-label="Copy snippet">{copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}{copied ? "Copied" : "Copy"}</button>;
+};
+
 const PlatformDocs = () => {
   const { slug } = useParams<{ slug: string }>();
   const doc = slug ? platformDocs[slug] : undefined;
   const bot = chatbots.find((b) => b.slug === slug);
   const [activeSection, setActiveSection] = useState<string>("");
+  const [favorite, setFavorite] = useState(() => slug ? localStorage.getItem(`favorite_doc_${slug}`) === "1" : false);
+  const toggleFavorite = () => { if (!slug) return; const next = !favorite; setFavorite(next); localStorage.setItem(`favorite_doc_${slug}`, next ? "1" : "0"); };
 
   useEffect(() => {
     if (!doc) return;
@@ -104,6 +112,7 @@ const PlatformDocs = () => {
           </div>
           <p className="text-muted-foreground max-w-3xl">{doc.overview}</p>
           <div className="flex items-center gap-4 mt-4 flex-wrap">
+            <button onClick={toggleFavorite} className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm ${favorite ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}><Star className={`h-4 w-4 ${favorite ? "fill-current" : ""}`} /> {favorite ? "Saved" : "Save guide"}</button>
             <a
               href={bot.url}
               target="_blank"
@@ -182,11 +191,10 @@ const PlatformDocs = () => {
                 </h2>
                 <ol className="space-y-3 ml-4">
                   {doc.setupSteps.map((step, i) => (
-                    <li key={i} className="flex gap-3">
-                      <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">
-                        {i + 1}
-                      </span>
-                      <span className="text-sm text-muted-foreground pt-0.5">{step}</span>
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-bold">{i + 1}</span>
+                      <span className="flex-1 text-sm text-muted-foreground pt-0.5">{step}</span>
+                      {/(git clone|npm |docker |https?:\/\/|--api|localhost)/i.test(step) && <CopySnippet text={step} />}
                     </li>
                   ))}
                 </ol>
@@ -220,8 +228,8 @@ const PlatformDocs = () => {
                 </h2>
                 <div className="space-y-3">
                   {doc.apiConfig.map((config, i) => (
-                    <div key={i} className="rounded-lg border border-border bg-secondary/50 p-3 text-sm text-muted-foreground">
-                      {config}
+                    <div key={i} className="flex items-start justify-between gap-3 rounded-lg border border-border bg-secondary/50 p-3 text-sm text-muted-foreground">
+                      <span className="font-mono text-xs leading-relaxed">{config}</span><CopySnippet text={config} />
                     </div>
                   ))}
                 </div>

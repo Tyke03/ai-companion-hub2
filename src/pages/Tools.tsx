@@ -1,5 +1,6 @@
 import { Layout } from "@/components/Layout";
-import { Wrench } from "lucide-react";
+import { Wrench, BookOpen, UserRound, Network } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocConsolidator } from "@/components/tools/DocConsolidator";
 import { CharacterCardBuilder } from "@/components/tools/CharacterCardBuilder";
@@ -20,8 +21,13 @@ const Tools = () => {
             AI Chatbot Tools
           </h1>
           <p className="max-w-2xl text-base text-muted-foreground sm:text-lg">
-            Documentation consolidator, character card builder, and prompt template builder — powered by AI.
+            Documentation consolidator, card and persona builders, lorebooks, prompt templates, and connection diagnostics for creators.
           </p>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Link to="/tools/lorebook-builder" className="inline-flex items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary"><BookOpen className="h-4 w-4" /> Lorebook Builder</Link>
+            <Link to="/tools/persona-builder" className="inline-flex items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary"><UserRound className="h-4 w-4" /> Persona Builder</Link>
+            <Link to="/tools/api-tester" className="inline-flex items-center gap-2 rounded-lg border border-border bg-secondary px-3 py-2 text-sm text-muted-foreground hover:border-primary/40 hover:text-primary"><Network className="h-4 w-4" /> API Tester</Link>
+          </div>
         </div>
       </header>
 

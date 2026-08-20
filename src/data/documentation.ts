@@ -564,3 +564,38 @@ export const platformDocs: Record<string, PlatformDoc> = {
   },
 };
 
+Object.assign(platformDocs, {
+  oobabooga: {
+    slug: "oobabooga", name: "text-generation-webui (Oobabooga)", lastReviewed: "2026-08",
+    overview: "A flexible local model web UI and API backend used by creators who want to run GGUF, GPTQ, EXL2, and other open-weight formats behind SillyTavern.",
+    officialDocs: "https://github.com/oobabooga/text-generation-webui/wiki", github: "https://github.com/oobabooga/text-generation-webui",
+    community: ["GitHub discussions", "Reddit: r/Oobabooga"],
+    setupSteps: ["Install Python and a supported GPU runtime", "Install text-generation-webui for your operating system", "Download a GGUF, GPTQ, or EXL2 model from a trusted model page", "Launch with the appropriate loader and add --api", "In SillyTavern choose Text Generation WebUI and connect to http://127.0.0.1:5000"],
+    features: ["GGUF, GPTQ, EXL2, AWQ and Transformers loaders", "OpenAI-like API mode via --api", "Sampler and context controls", "Extensions and chat templates", "Local-only inference"],
+    apiConfig: ["Launch flag: --api", "Default API URL: http://127.0.0.1:5000", "SillyTavern: API → Text Generation WebUI → enter the local endpoint", "Match the model's chat template and keep context within available VRAM"],
+    characterFormat: "Character cards are managed by the connected frontend, typically V2/V3 PNG or JSON.", nsfwSettings: "The web UI does not impose a roleplay content policy; model behavior and any extensions determine filtering.",
+    troubleshooting: ["CUDA out of memory: reduce context or load a smaller quantization.", "SillyTavern cannot connect: confirm --api is present and the port is reachable.", "Poor output: select the model's recommended chat template and sampler preset."],
+  },
+  koboldai: {
+    slug: "koboldai", name: "KoboldAI & KoboldCPP", lastReviewed: "2026-08",
+    overview: "KoboldAI provides local story inference and world info; KoboldCPP is a convenient single-binary GGUF runner, while KoboldAI Horde provides volunteer-hosted inference.",
+    officialDocs: "https://koboldai.org", github: "https://github.com/LostRuins/koboldcpp",
+    community: ["KoboldAI Discord", "KoboldAI Horde documentation", "Reddit: r/KoboldAI"],
+    setupSteps: ["For local use, download KoboldCPP for your operating system", "Download a compatible GGUF model", "Launch KoboldCPP and choose GPU layers appropriate to your VRAM", "Copy the local API URL shown by KoboldCPP into SillyTavern's Kobold connection", "For Horde, choose KoboldAI Horde as the API and create an optional Horde API key", "Select a worker/model and start with conservative context settings"],
+    features: ["Zero-install KoboldCPP binary", "GGUF CPU/GPU hybrid inference", "World Info and memory support", "KoboldAI Horde volunteer inference", "SillyTavern-compatible API"],
+    apiConfig: ["KoboldCPP default endpoint is commonly http://127.0.0.1:5001", "Horde API keys are optional for light usage but improve queue priority", "Never paste a paid provider key into a public Horde worker or shared computer"],
+    characterFormat: "Use V2/V3 cards in SillyTavern; World Info is exported separately as compatible JSON.", nsfwSettings: "The frontend/backend has no single universal filter; model choice, worker policy, and community rules still apply.",
+    troubleshooting: ["No workers on Horde: choose a popular model or wait for the queue.", "Local generation is slow: add GPU layers or use a smaller quantization.", "World Info not triggering: check keys, secondary keys, and insertion budget."],
+  },
+  "nomi-ai": {
+    slug: "nomi-ai", name: "Nomi AI", lastReviewed: "2026-08",
+    overview: "Nomi AI is a hosted companion app focused on persistent relationships, multi-companion conversations, and long-term memory rather than portable character-card files.",
+    officialDocs: "https://nomi.ai", community: ["Reddit: r/NomiAI", "Nomi community channels"],
+    setupSteps: ["Create an account at nomi.ai or install the mobile app", "Define the Nomi's backstory, personality, relationship, and communication style", "Use explicit backstory blocks for durable facts and keep dynamic events in conversation", "Review memory summaries and correct important facts as the relationship develops", "Use group conversations carefully so each Nomi has a distinct role"],
+    features: ["Long-term memory", "Multiple companions", "Voice and image features", "Dynamic backstory and personality fields", "Cross-device hosted experience"],
+    apiConfig: ["Nomi AI is a native hosted companion and does not expose a general public OpenAI-compatible endpoint.", "Treat backstory as durable system context; put temporary scene goals in the current message."],
+    characterFormat: "Platform-native persona fields; standard V2/V3 character-card import is not the primary workflow.", nsfwSettings: "NSFW capability and moderation are controlled by the hosted service and may change; verify current account and age-gate rules.",
+    troubleshooting: ["Memory drift: restate the key fact in the durable backstory or memory controls.", "Dynamic backstory conflicts: separate permanent biography from temporary scene instructions.", "Group confusion: give each Nomi a distinct voice and avoid overly similar backstories."],
+  },
+});
+

@@ -1,9 +1,9 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Copy, Check, Download, Sparkles, Upload, Loader2, Image, Trash2, Plus, AlertTriangle, WifiOff } from "lucide-react";
+import { Copy, Check, Download, Sparkles, Upload, Loader2, Image, Trash2, Plus, AlertTriangle, WifiOff, Settings2, Eye, FileJson } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { embedCardInPng, extractCardFromPng } from "@/lib/pngChunk";
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const errMsg = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+interface AssetDeclaration { type: "expression" | "audio" | "outfit" | "other"; uri: string; name: string; }
 
 interface CharacterCardData {
   name: string;
@@ -146,8 +148,14 @@ function toList(value: string): string[] {
 }
 
 export const CharacterCardBuilder = () => {
-  const [card, setCard] = useState<CharacterCardData>(defaultCard);
+  const [card, setCard] = useState<CharacterCardData>(() => {
+    try { return JSON.parse(localStorage.getItem("ai-companion-hub-card-draft") || "null") || defaultCard; } catch { return defaultCard; }
+  });
   const [specVersion, setSpecVersion] = useState<SpecVersion>("v2");
+  const [generationMode, setGenerationMode] = useState<"default" | "byok">("default");
+  const [showGenerationSettings, setShowGenerationSettings] = useState(false);
+  const [previewMode, setPreviewMode] = useState<"json" | "chat">("json");
+  const [assets, setAssets] = useState<AssetDeclaration[]>([]);
   const [copied, setCopied] = useState(false);
   const [generatingField, setGeneratingField] = useState<string | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
@@ -160,6 +168,8 @@ export const CharacterCardBuilder = () => {
   const { toast } = useToast();
   const aiStatus = useAiBackendStatus();
   const aiUnavailable = aiStatus === "unavailable";
+
+  useEffect(() => { localStorage.setItem("ai-companion-hub-card-draft", JSON.stringify(card)); }, [card]);
 
   const pngPreviewUrl = useMemo(() => pngFile ? URL.createObjectURL(pngFile) : null, [pngFile]);
 
@@ -216,11 +226,15 @@ export const CharacterCardBuilder = () => {
       group_only_greetings: card.group_only_greetings.filter((g) => g.trim()),
       source: card.source.filter((s) => s.trim()),
       creator_notes_multilingual: multilingual.valid ? multilingual.value : undefined,
-      assets: [],
+      assets: assets.filter((asset) => asset.name.trim() || asset.uri.trim()),
     },
   });
 
   const getCardJson = () => (specVersion === "v3" ? generateV3Json() : generateV2Json());
+  const permanentTokens = [card.name, card.description, card.personality, card.scenario].reduce((sum, value) => sum + Math.ceil(value.trim().split(/\s+/).filter(Boolean).length * 1.3), 0);
+  const variableTokens = [card.first_mes, card.mes_example].reduce((sum, value) => sum + Math.ceil(value.trim().split(/\s+/).filter(Boolean).length * 1.3), 0);
+  const totalTokens = permanentTokens + variableTokens;
+  const renderGreeting = (): ReactNode => card.first_mes.split(/(\*[^*]+\*|"[^"]+")/g).filter(Boolean).map((part, index) => part.startsWith("*") && part.endsWith("*") ? <em key={index} className="text-muted-foreground">{part}</em> : part.startsWith('"') && part.endsWith('"') ? <strong key={index} className="text-foreground">{part}</strong> : <span key={index}>{part}</span>);
 
   const handleCopyJson = () => {
     navigator.clipboard.writeText(JSON.stringify(getCardJson(), null, 2));
@@ -285,8 +299,7 @@ export const CharacterCardBuilder = () => {
   const handleGenerateAll = async () => {
     setGeneratingAll(true);
     try {
-      const { data, error } = await supabase.functions.invoke("venice-ai", {
-        body: { action: "generate-all", existingFields: card },
+      const { data, error } = await supabase.functions.invoke("venice-ai", {          body: { action: "generate-all", existingFields: card, generationMode },
       });
       if (error) throw error;
       if (data?.result && typeof data.result === "object" && !data.parseError) {
@@ -324,7 +337,10 @@ export const CharacterCardBuilder = () => {
       const bytes = new Uint8Array(await file.arrayBuffer());
       const extracted = extractCardFromPng(bytes);
       if (extracted) {
-        const parsed = extracted.data?.data || extracted.data;
+        const nestedData = extracted.data.data;
+        const parsed = nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)
+          ? nestedData as Record<string, unknown>
+          : extracted.data;
         applyParsedCard(parsed);
         toast({ title: "Imported", description: `Extracted ${extracted.chunkName} card from PNG.` });
         setPngFile(file);
@@ -371,12 +387,12 @@ export const CharacterCardBuilder = () => {
       try {
         parsed = JSON.parse(importText);
         if (parsed?.spec === "chara_card_v3" && parsed?.data) {
-          applyParsedCard(parsed.data);
+          applyParsedCard(parsed.data as Record<string, unknown>);
           setSpecVersion("v3");
           toast({ title: "Imported", description: "V3 character card loaded." });
           setShowImport(false); setImportText(""); return;
         }
-        if (parsed?.data) parsed = parsed.data;
+        if (parsed?.data) parsed = parsed.data as Record<string, unknown>;
         if (parsed?.name || parsed?.description || parsed?.personality) {
           applyParsedCard(parsed);
           toast({ title: "Imported", description: "Character data loaded from JSON." });
@@ -404,6 +420,7 @@ export const CharacterCardBuilder = () => {
 
   const handleClearAll = () => {
     setCard(defaultCard);
+    setAssets([]);
     setPngFile(null);
     toast({ title: "Cleared", description: "All fields have been reset." });
   };
@@ -479,10 +496,10 @@ export const CharacterCardBuilder = () => {
             <Upload className="h-4 w-4" /> Import (File/PNG)
           </Button>
         </div>
-        <Button onClick={handleGenerateAll} disabled={generatingAll || aiUnavailable}>
+        <div className="flex items-center gap-1"><Button onClick={handleGenerateAll} disabled={generatingAll || aiUnavailable}>
           {generatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
           {generatingAll ? "Generating..." : "Generate All Fields"}
-        </Button>
+        </Button><Button variant="outline" size="icon" onClick={() => setShowGenerationSettings((value) => !value)} aria-label="Generation settings" title="Generation settings"><Settings2 className="h-4 w-4" /></Button></div>
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/10">
@@ -501,6 +518,8 @@ export const CharacterCardBuilder = () => {
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      {showGenerationSettings && <div className="rounded-lg border border-primary/20 bg-primary/5 p-4"><div className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-primary" /><p className="text-sm font-medium text-foreground">AI generation settings</p></div><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setGenerationMode("default")} className={`rounded-md border px-3 py-1.5 text-xs ${generationMode === "default" ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>Default Free API</button><button onClick={() => setGenerationMode("byok")} className={`rounded-md border px-3 py-1.5 text-xs ${generationMode === "byok" ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>Custom OpenRouter / BYOK</button></div><p className="mt-2 text-xs text-muted-foreground">Privacy: the default mode uses the configured app backend. BYOK mode is a setting placeholder until a custom key is entered; keys should remain in memory and never be logged.</p></div>}
 
       {/* Import panel */}
       {showImport && (
@@ -586,11 +605,10 @@ export const CharacterCardBuilder = () => {
                 addLabel="Add group greeting"
               />
             </div>
-            <div className="rounded-lg border border-border bg-secondary/30 p-4">
-              <p className="text-sm font-medium text-foreground mb-1">Assets (V3)</p>
-              <p className="text-xs text-muted-foreground">
-                The V3 spec's <code className="text-primary">assets</code> array holds files referenced by extensions (images, expression packs, audio). This builder exports an empty array — populate it later if your frontend supports assets.
-              </p>
+            <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
+              <div><p className="text-sm font-medium text-foreground">Assets (V3)</p><p className="text-xs text-muted-foreground">Declare optional files without uploading them: expression sprites, greeting audio, alternate outfits, or other frontend assets.</p></div>
+              {assets.map((asset, index) => <div key={index} className="grid gap-2 sm:grid-cols-[140px_1fr_1fr_auto]"><select value={asset.type} onChange={(event) => setAssets((previous) => previous.map((item, i) => i === index ? { ...item, type: event.target.value as AssetDeclaration["type"] } : item))} className="h-10 rounded-md border border-border bg-secondary px-2 text-sm"><option value="expression">Expression sprite</option><option value="audio">Greeting audio</option><option value="outfit">Alternate outfit</option><option value="other">Other</option></select><Input value={asset.name} onChange={(event) => setAssets((previous) => previous.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} placeholder="Asset name" className="bg-secondary" /><Input value={asset.uri} onChange={(event) => setAssets((previous) => previous.map((item, i) => i === index ? { ...item, uri: event.target.value } : item))} placeholder="assets/expressions/happy.png" className="bg-secondary" /><Button variant="ghost" size="sm" onClick={() => setAssets((previous) => previous.filter((_, i) => i !== index))} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></div>)}
+              <Button variant="outline" size="sm" onClick={() => setAssets((previous) => [...previous, { type: "expression", name: "", uri: "" }])}><Plus className="h-4 w-4" /> Add asset declaration</Button>
             </div>
           </>
         )}
@@ -669,10 +687,8 @@ export const CharacterCardBuilder = () => {
       {/* Preview */}
       {card.name && (
         <div>
-          <h3 className="font-display font-semibold text-foreground mb-2">Preview ({specVersion.toUpperCase()})</h3>
-          <pre className="rounded-lg border border-border bg-secondary/50 p-4 text-xs text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">
-            {JSON.stringify(getCardJson(), null, 2)}
-          </pre>
+          <div className="mb-2 flex items-center justify-between"><h3 className="font-display font-semibold text-foreground">Live preview</h3><div className="flex gap-2"><Button variant={previewMode === "json" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("json")}><FileJson className="h-4 w-4" /> JSON</Button><Button variant={previewMode === "chat" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("chat")}><Eye className="h-4 w-4" /> Chat bubble</Button></div></div>
+          {previewMode === "json" ? <><div className="mb-3 rounded-lg border border-border bg-secondary/30 p-3"><div className="mb-2 flex justify-between text-xs"><span>Permanent: {permanentTokens}</span><span>Variable: {variableTokens}</span><span>Total: {totalTokens}</span></div><div className="flex h-3 overflow-hidden rounded-full bg-secondary"><div className="bg-primary" style={{ width: `${Math.min(100, totalTokens ? permanentTokens / totalTokens * 100 : 0)}%` }} /><div className="bg-sky-500" style={{ width: `${Math.min(100, totalTokens ? variableTokens / totalTokens * 100 : 0)}%` }} /></div><p className={`mt-2 text-xs ${permanentTokens > 2048 ? "text-destructive" : "text-muted-foreground"}`}>{permanentTokens > 2048 ? "Warning: permanent definition exceeds 2,048 tokens." : `Recommended context buffer: approximately ${Math.max(0, 2048 - permanentTokens).toLocaleString()} tokens remaining.`}</p></div><pre className="rounded-lg border border-border bg-secondary/50 p-4 text-xs text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">{JSON.stringify(getCardJson(), null, 2)}</pre></> : <div className="rounded-xl border border-border bg-card p-5"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">{card.name.slice(0, 1).toUpperCase()}</div><div><p className="font-semibold text-foreground">{card.name}</p><p className="text-xs text-muted-foreground">Opening scene</p></div></div><div className="max-w-2xl rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">{renderGreeting()}</div></div>}
         </div>
       )}
     </div>

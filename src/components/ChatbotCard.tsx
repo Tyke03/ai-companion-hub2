@@ -7,10 +7,11 @@ import {
 } from "@/data/chatbots";
 import {
   ExternalLink, BookOpen, Globe, Monitor, HardDrive, Smartphone, Code,
-  Image, Mic, MessageSquare, Database, ShieldCheck, CalendarDays, Plus, Check,
+  Image, Mic, MessageSquare, Database, ShieldCheck, CalendarDays, Plus, Check, Star,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { platformDocs } from "@/data/documentation";
+import { useState } from "react";
 
 const accessTypeIcons: Record<string, { icon: typeof Globe; label: string }> = {
   Web: { icon: Globe, label: "Web" },
@@ -47,7 +48,10 @@ export const ChatbotCard = ({
   compareSelected?: boolean;
   onCompareToggle?: (slug: string) => void;
 }) => {
-  const hasDocs = !!platformDocs[bot.slug];
+  // A badge is only meaningful when both the record and the internal guide exist.
+  const hasDocs = bot.docsAvailable && !!platformDocs[bot.slug];
+  const [favorite, setFavorite] = useState(() => localStorage.getItem(`favorite_platform_${bot.slug}`) === "1");
+  const toggleFavorite = () => { const next = !favorite; setFavorite(next); localStorage.setItem(`favorite_platform_${bot.slug}`, next ? "1" : "0"); };
   const accessTypes = getAccessTypes(bot.type);
 
   return (
@@ -57,6 +61,7 @@ export const ChatbotCard = ({
           {bot.name}
         </h3>
         <div className="flex items-center gap-1.5 shrink-0">
+          <button onClick={toggleFavorite} title={favorite ? "Remove bookmark" : "Bookmark platform"} aria-label={favorite ? `Remove ${bot.name} bookmark` : `Bookmark ${bot.name}`} className={`flex h-7 w-7 items-center justify-center rounded-md border ${favorite ? "border-primary bg-primary/15 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-primary"}`}><Star className={`h-3.5 w-3.5 ${favorite ? "fill-current" : ""}`} /></button>
           {onCompareToggle && (
             <button
               onClick={() => onCompareToggle(bot.slug)}
