@@ -352,7 +352,15 @@ Write ONLY the variable value — no labels, no quotes around it, no explanation
         }
       }
 
-      const varList = variables.map((v: any) => `- ${v.name}: ${v.description} (example: ${v.placeholder})`).join('\n');
+      type PromptVariable = { name: string; description: string; placeholder: string };
+      const promptVariables = variables.filter((variable: unknown): variable is PromptVariable => {
+        if (!variable || typeof variable !== 'object') return false;
+        const candidate = variable as Record<string, unknown>;
+        return typeof candidate.name === 'string'
+          && typeof candidate.description === 'string'
+          && typeof candidate.placeholder === 'string';
+      });
+      const varList = promptVariables.map((variable) => `- ${variable.name}: ${variable.description} (example: ${variable.placeholder})`).join('\n');
 
       const prompt = `Generate ALL variables for the "${templateName}" prompt template.
 Template description: ${templateDescription}
