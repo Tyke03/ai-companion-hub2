@@ -15,10 +15,18 @@ import NotFound from "@/pages/NotFound";
 
 // Mock the AI edge function so health checks resolve instantly as "available"
 vi.mock("@/integrations/supabase/client", () => ({
+  isSupabaseConfigured: true,
   supabase: {
     functions: {
       invoke: vi.fn().mockResolvedValue({ data: { ok: true }, error: null }),
     },
+    from: vi.fn(() => ({
+      select: vi.fn(() => ({
+        order: vi.fn(() => ({
+          limit: vi.fn(() => Promise.resolve({ data: [], error: null })),
+        })),
+      })),
+    })),
   },
 }));
 

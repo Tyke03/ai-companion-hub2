@@ -166,8 +166,8 @@ export const CharacterCardBuilder = () => {
   const pngInputRef = useRef<HTMLInputElement>(null);
   const fileImportRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
-  const aiStatus = useAiBackendStatus();
-  const aiUnavailable = aiStatus === "unavailable";
+  const ai = useAiBackendStatus();
+  const aiUnavailable = ai.status === "unavailable";
 
   useEffect(() => { localStorage.setItem("ai-companion-hub-card-draft", JSON.stringify(card)); }, [card]);
 
@@ -276,6 +276,10 @@ export const CharacterCardBuilder = () => {
   };
 
   const handleGenerateField = async (fieldName: keyof CharacterCardData) => {
+    if (!supabase) {
+      toast({ title: "Unavailable", description: "AI generation is unavailable because Supabase is not configured.", variant: "destructive" });
+      return;
+    }
     setGeneratingField(fieldName);
     try {
       const { data, error } = await supabase.functions.invoke("venice-ai", {
@@ -297,6 +301,10 @@ export const CharacterCardBuilder = () => {
   };
 
   const handleGenerateAll = async () => {
+    if (!supabase) {
+      toast({ title: "Unavailable", description: "AI generation is unavailable because Supabase is not configured.", variant: "destructive" });
+      return;
+    }
     setGeneratingAll(true);
     try {
       const { data, error } = await supabase.functions.invoke("venice-ai", {          body: { action: "generate-all", existingFields: card, generationMode },
@@ -400,6 +408,10 @@ export const CharacterCardBuilder = () => {
         }
       } catch { /* Not JSON — send to AI */ }
 
+      if (!supabase) {
+        toast({ title: "Unavailable", description: "AI conversion is unavailable because Supabase is not configured.", variant: "destructive" });
+        return;
+      }
       const { data, error } = await supabase.functions.invoke("venice-ai", {
         body: { action: "convert-character", inputText: importText },
       });
@@ -457,7 +469,7 @@ export const CharacterCardBuilder = () => {
       </div>
 
       {/* AI backend status banner */}
-      {aiStatus === "checking" && (
+      {ai.status === "checking" && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Checking AI backend...
@@ -471,6 +483,7 @@ export const CharacterCardBuilder = () => {
             <p className="text-muted-foreground">
               Manual editing, import, JSON export, and PNG embedding still work. AI generation buttons are disabled until the backend is reachable again.
             </p>
+            {ai.reason && <p className="mt-1 text-xs text-muted-foreground/80">{ai.reason}</p>}
           </div>
         </div>
       )}

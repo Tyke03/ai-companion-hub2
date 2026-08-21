@@ -21,8 +21,8 @@ export const PromptBuilder = () => {
   const [showRawContext, setShowRawContext] = useState(false);
   const [rawContext, setRawContext] = useState("");
   const { toast } = useToast();
-  const aiStatus = useAiBackendStatus();
-  const aiUnavailable = aiStatus === "unavailable";
+  const ai = useAiBackendStatus();
+  const aiUnavailable = ai.status === "unavailable";
 
   const handleSelectTemplate = (template: PromptTemplate) => {
     setSelectedTemplate(template);
@@ -46,6 +46,10 @@ export const PromptBuilder = () => {
 
   const handleGenerateVariable = async (varName: string) => {
     const varDef = selectedTemplate.variables.find((v) => v.name === varName);
+    if (!supabase) {
+      toast({ title: "Unavailable", description: "AI generation is unavailable because Supabase is not configured.", variant: "destructive" });
+      return;
+    }
     setGeneratingVar(varName);
     try {
       const { data, error } = await supabase.functions.invoke("venice-ai", {
@@ -70,6 +74,10 @@ export const PromptBuilder = () => {
   };
 
   const handleGenerateAll = async () => {
+    if (!supabase) {
+      toast({ title: "Unavailable", description: "AI generation is unavailable because Supabase is not configured.", variant: "destructive" });
+      return;
+    }
     setGeneratingAll(true);
     try {
       const { data, error } = await supabase.functions.invoke("venice-ai", {
@@ -164,7 +172,7 @@ export const PromptBuilder = () => {
       </div>
 
       {/* AI backend status banner */}
-      {aiStatus === "checking" && (
+      {ai.status === "checking" && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Checking AI backend...
@@ -178,6 +186,7 @@ export const PromptBuilder = () => {
             <p className="text-muted-foreground">
               Manual template filling, populating from a character card, and copying prompts still work. AI generation is disabled until the backend is reachable again.
             </p>
+            {ai.reason && <p className="mt-1 text-xs text-muted-foreground/80">{ai.reason}</p>}
           </div>
         </div>
       )}

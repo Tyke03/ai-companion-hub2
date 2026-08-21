@@ -29,8 +29,8 @@ export const DocConsolidator = () => {
   const [fetching, setFetching] = useState(false);
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
-  const aiStatus = useAiBackendStatus();
-  const aiUnavailable = aiStatus === "unavailable";
+  const ai = useAiBackendStatus();
+  const aiUnavailable = ai.status === "unavailable";
 
   const effectiveName = serviceName === "custom" ? customName : serviceName;
   const charCount = inputText.length;
@@ -80,6 +80,11 @@ export const DocConsolidator = () => {
   const handleConsolidate = async () => {
     if (!inputText.trim() || !effectiveName) {
       toast({ title: "Missing info", description: "Please select a service and provide documentation text.", variant: "destructive" });
+      return;
+    }
+
+    if (!supabase) {
+      toast({ title: "Unavailable", description: "AI consolidation is unavailable because Supabase is not configured.", variant: "destructive" });
       return;
     }
 
@@ -142,7 +147,7 @@ export const DocConsolidator = () => {
       </div>
 
       {/* AI backend status banner */}
-      {aiStatus === "checking" && (
+      {ai.status === "checking" && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           Checking AI backend...
@@ -156,6 +161,7 @@ export const DocConsolidator = () => {
             <p className="text-muted-foreground">
               URL fetching and consolidation require the AI backend. You can still copy, download, and save previously generated results.
             </p>
+            {ai.reason && <p className="mt-1 text-xs text-muted-foreground/80">{ai.reason}</p>}
           </div>
         </div>
       )}
