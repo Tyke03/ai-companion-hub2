@@ -78,7 +78,16 @@ Deno.serve(async (req) => {
 
     // === HEALTH CHECK ===
     if (action === 'health') {
-      return new Response(JSON.stringify({ ok: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      // Never report healthy unless at least one provider key is configured.
+      // A configured key is still not a guarantee it is valid, but reporting
+      // healthy with no key would enable AI buttons that are guaranteed to fail.
+      const hasProviderKey = Boolean(
+        Deno.env.get('VENICE_API_KEY') || Deno.env.get('OPENROUTER_API_KEY') || Deno.env.get('LOVABLE_API_KEY'),
+      );
+      const payload = hasProviderKey
+        ? { ok: true }
+        : { ok: false, reason: 'No provider API key is configured (VENICE_API_KEY, OPENROUTER_API_KEY, or LOVABLE_API_KEY).' };
+      return new Response(JSON.stringify(payload), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     // === FETCH URL (Doc Consolidator) ===
