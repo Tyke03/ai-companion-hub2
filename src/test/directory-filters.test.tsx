@@ -106,8 +106,11 @@ describe("Directory filter controls", () => {
     fireEvent.click(screen.getByRole("button", { name: "Voice/TTS" }));
     fireEvent.click(screen.getByRole("button", { name: "Group chat" }));
     fireEvent.click(screen.getByRole("button", { name: "Multi-modal" }));
-    expect(screen.getByText("No platforms match your search and filters.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
+    expect(screen.getByText("No platforms match your search and filters.")).toBeInTheDocument();    expect(screen.getByRole("button", { name: "Clear filters" })).toBeInTheDocument();
   });
 
+  it("exposes the mobile filters trigger", () => {
+    renderPage();
+    expect(screen.getByRole("button", { name: /Filters/ })).toBeInTheDocument();
+  });
 });

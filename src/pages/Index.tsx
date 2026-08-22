@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, type ReactNode } from "react";
-import { Search, Scale, X } from "lucide-react";
+import { Search, Scale, X, SlidersHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   chatbots, categoryLabels, contentLevelLabels,
@@ -56,6 +56,7 @@ const Index = () => {
   const [cards, setCards] = useState<CardSpec[]>([]);
   const [compareSet, setCompareSet] = useState<Set<string>>(new Set());
   const [compareOpen, setCompareOpen] = useState(false);
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const debouncedSearch = useDebounce(search, 250);
 
   // Support global search navigation: /  with state { q }
@@ -93,6 +94,13 @@ const Index = () => {
   const filtered = useMemo(() => filterChatbots(chatbots, filterState), [filterState]);
   const categoryCounts = useMemo(() => countByCategory(chatbots, filterState), [filterState]);
   const filterActive = isFilterActive(filterState);
+
+  const activeFilterCount =
+    (category !== "all" ? 1 : 0) +
+    (content !== "all" ? 1 : 0) +
+    features.length +
+    access.length +
+    cards.length;
 
   const clearAll = () => {
     setCategory("all");
@@ -208,7 +216,29 @@ const Index = () => {
             </div>
           </div>
 
-          <DirectoryFilters {...filterPanelProps} />
+          {/* Mobile filter trigger (below md) */}
+          <div className="md:hidden">
+            <Button
+              variant="outline"
+              className="w-full justify-between"
+              onClick={() => setMobileFiltersOpen(true)}
+            >
+              <span className="inline-flex items-center gap-2">
+                <SlidersHorizontal className="h-4 w-4" />
+                Filters
+              </span>
+              {activeFilterCount > 0 && (
+                <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+          </div>
+
+          {/* Desktop filter panel (md and up) */}
+          <div className="hidden md:block">
+            <DirectoryFilters {...filterPanelProps} />
+          </div>
 
           {/* Active filter chips */}
           {chips.length > 0 && (
@@ -260,6 +290,27 @@ const Index = () => {
           last-verified date.
         </p>
       </main>
+
+      {/* Mobile filter sheet */}
+      <Sheet open={mobileFiltersOpen} onOpenChange={setMobileFiltersOpen}>
+        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto">
+          <SheetHeader className="mb-4 text-left">
+            <SheetTitle>Filters</SheetTitle>
+            <SheetDescription>
+              Refine the directory by category, content, features, access, and card specs.
+            </SheetDescription>
+          </SheetHeader>
+          <DirectoryFilters {...filterPanelProps} />
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={clearAll}>
+              Clear all
+            </Button>
+            <Button size="sm" onClick={() => setMobileFiltersOpen(false)}>
+              Show {filtered.length} results
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Compare bar */}
       {compareBots.length > 0 && (
