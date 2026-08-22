@@ -17,6 +17,22 @@ Object.defineProperty(window, "IntersectionObserver", {
   value: IntersectionObserverMock as unknown as typeof IntersectionObserver,
 });
 
+// jsdom lacks ResizeObserver (used by cmdk's CommandList)
+class ResizeObserverMock {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+Object.defineProperty(window, "ResizeObserver", {
+  writable: true,
+  value: ResizeObserverMock as unknown as typeof ResizeObserver,
+});
+
+// jsdom lacks Element.prototype.scrollIntoView (used by cmdk selection)
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = () => {};
+}
+
 Object.defineProperty(window, "matchMedia", {
   writable: true,
   value: (query: string) => ({

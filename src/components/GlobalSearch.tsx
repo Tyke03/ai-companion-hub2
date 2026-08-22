@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search, Sparkles, BookOpen, PenLine, Users, FileText, ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
 import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { chatbots, categoryLabels } from "@/data/chatbots";
@@ -33,6 +33,10 @@ export const GlobalSearch = () => {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // Controlled selection. cmdk's keyboard navigation (ArrowUp/ArrowDown/Enter)
+  // drives this value through onValueChange; we reset it deterministically to
+  // the first match whenever the query changes so selection never goes stale.
+  const [value, setValue] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -127,6 +131,22 @@ export const GlobalSearch = () => {
 
   const hasResults = groupOrder.some((group) => filteredGroups[group].length > 0);
 
+  // First visible result for the current query (selection resets to this).
+  const firstResultId = useMemo(() => {
+    for (const group of groupOrder) {
+      if (filteredGroups[group].length > 0) return filteredGroups[group][0].id;
+    }
+    return "";
+  }, [filteredGroups]);
+
+  const prevQueryRef = useRef(query);
+  useEffect(() => {
+    if (prevQueryRef.current !== query) {
+      prevQueryRef.current = query;
+      setValue(firstResultId);
+    }
+  }, [query, firstResultId]);
+
   const renderGroup = (group: Group) => {
     const items = filteredGroups[group];
     if (items.length === 0) return null;
@@ -182,6 +202,8 @@ export const GlobalSearch = () => {
         open={open}
         onOpenChange={setOpen}
         shouldFilter={false}
+        value={value}
+        onValueChange={setValue}
         title="Search platforms, docs, articles, and communities"
       >
         <CommandInput
