@@ -121,7 +121,7 @@ const Prompts = () => {
                   <div><dt className="text-muted-foreground">Target</dt><dd className="font-medium text-foreground">{compatibility.target}</dd></div>
                   <div><dt className="text-muted-foreground">Artifact</dt><dd className="font-medium text-foreground">{labelFor(compatibility.artifactType)}</dd></div>
                   <div><dt className="text-muted-foreground">Format</dt><dd className="font-medium text-foreground">{compatibility.format === "plain-text" ? "Plain text" : "Platform-native"}</dd></div>
-                  <div><dt className="text-muted-foreground">Confidence</dt><dd className="font-medium text-foreground">{isVerified ? "Verified" : "Universal"}</dd></div>
+                  <div><dt className="text-muted-foreground">Confidence</dt><dd className="font-medium text-foreground">{item.userCreated ? "User-created" : isVerified ? "Verified" : "Universal"}</dd></div>
                   <div className="col-span-2"><dt className="text-muted-foreground">Runtime macros</dt><dd className="font-mono text-foreground">{compatibility.runtimeMacros.length > 0 ? compatibility.runtimeMacros.join(", ") : "None"}</dd></div>
                 </dl>
                 <p className="mt-3 text-xs text-muted-foreground">{compatibility.pasteInstructions}</p>

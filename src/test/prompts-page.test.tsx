@@ -68,6 +68,7 @@ describe("Prompts page", () => {
     const card = heading.closest("article");
     expect(card).toHaveTextContent("Universal");
     expect(card).toHaveTextContent("Plain text");
+    expect(card).toHaveTextContent("User-created");
     expect(card).toHaveTextContent("[Topic]");
     expect(card?.querySelector("a")).toHaveAttribute("href", "/tools?tab=prompts&template=custom-legacy");
   });

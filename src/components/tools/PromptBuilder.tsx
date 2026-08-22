@@ -234,6 +234,7 @@ export const PromptBuilder = () => {
           <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">{compatibility.artifactType}</span>
           <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">{compatibility.format === "plain-text" ? "Plain text" : "Platform-native"}</span>
           {compatibility.lane === "verified-platform" && <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-400">Confidence: Verified</span>}
+          {selectedTemplate.userCreated && <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-1 text-primary">User-created</span>}
         </div>
         <p className="mt-3 text-sm text-muted-foreground">{compatibility.pasteInstructions}</p>
         <p className="mt-2 text-xs text-muted-foreground">
