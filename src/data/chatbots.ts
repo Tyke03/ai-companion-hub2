@@ -12,6 +12,12 @@ export type ContentLevel = 1 | 2 | 3 | 4 | 5;
 /** Whether the platform exposes an API you can plug into SillyTavern/RisuAI */
 export type ApiAccess = "none" | "open" | "subscription";
 
+/** Access/pricing filter trait (see platformFilterFacts below). */
+export type AccessTag = "foss" | "free" | "byok" | "paid";
+
+/** Character-card spec filter trait (see platformFilterFacts below). */
+export type CardSpec = "v2" | "v3" | "json" | "native";
+
 export interface Chatbot {
   name: string;
   slug: string;
@@ -650,6 +656,120 @@ export const chatbots: Chatbot[] = [
     cardFormat: "V1/V2 PNG + JSON", lastVerified: "2026-08",
   },
 ];
+
+/**
+ * Structured filter facts — the single source of truth for the directory
+ * filter selector.
+ *
+ * These are manually reviewed facts keyed by the same slug used in the
+ * `chatbots` array (never a duplicate platform list). Rules applied:
+ *
+ * - `cardSpecs` is normalized from each platform's curated `cardFormat` string
+ *   (e.g. "V1/V2/V3 PNG + JSON" -> ["v2", "v3", "json"]).
+ * - `accessTags` is normalized from curated `pricing` + `apiAccess` (+ explicit
+ *   BYO-key mentions). "Freemium" implies both `free` and `paid`.
+ * - `hasGroupChat`, `hasMultimodal`, and `hasSfwNsfwToggle` are only set when
+ *   there is explicit evidence (structured capability flags, or an explicit
+ *   mention in the curated description/policy). They are OMITTED when unknown,
+ *   and an omitted field never matches its claimed trait.
+ *
+ * Platforms with ambiguous traits are intentionally left unpopulated rather
+ * than guessed (see docs/site-audit.md and the Batch 1A review report).
+ */
+export interface PlatformFilterFacts {
+  hasGroupChat?: boolean;
+  hasMultimodal?: boolean;
+  hasSfwNsfwToggle?: boolean;
+  accessTags?: AccessTag[];
+  cardSpecs?: CardSpec[];
+}
+
+export const platformFilterFacts: Record<string, PlatformFilterFacts> = {
+  // Local frontends
+  sillytavern: { accessTags: ["foss", "free", "byok"], cardSpecs: ["v2", "v3", "json"] },
+  tavernai: { accessTags: ["foss", "free", "byok"], cardSpecs: ["v2", "json"] },
+  risuai: { hasGroupChat: true, accessTags: ["foss", "free", "byok"], cardSpecs: ["v2", "json"] },
+  agnaistic: { accessTags: ["foss", "free", "byok"], cardSpecs: ["json"] },
+  "hammer-ai": { accessTags: ["free", "byok"], cardSpecs: ["native"] },
+  oobabooga: { accessTags: ["foss", "free", "byok"], cardSpecs: ["v2"] },
+  koboldai: { accessTags: ["foss", "free", "byok"], cardSpecs: ["v2"] },
+
+  // Hosted RP platforms
+  "janitor-ai": { accessTags: ["free", "paid", "byok"], cardSpecs: ["json"] },
+  "crushon-ai": { accessTags: ["free", "paid", "byok"], cardSpecs: ["native"] },
+  "character-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  novelai: { accessTags: ["paid"], cardSpecs: ["v2", "json"] },
+  "venus-ai": { accessTags: ["free", "byok"], cardSpecs: ["v2"] },
+  "charstar-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "botify-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "spicychat-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "erogen-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  fapai: { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  soulkyn: { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "alice-ai": { accessTags: ["free"], cardSpecs: ["native"] },
+  "fallfor-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "fantasy-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "leelee-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "kink-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "juicychat-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "pephop-ai": { hasSfwNsfwToggle: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "rprp-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  magicbuddy: { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "miku-gg": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  flowgpt: { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "joyland-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+
+  // Character libraries
+  "chub-ai": { accessTags: ["free", "byok"], cardSpecs: ["v2", "v3", "json"] },
+
+  // Companion apps
+  "candy-ai": { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  girlfriendgpt: { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  dreamgf: { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "kupid-ai": { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "lovescape-ai": { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "swipey-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "secret-desires": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "lustgf-ai": { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "eden-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "cutechat-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "hotchat-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "sedux-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "yume-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "golove-ai": { accessTags: ["free"], cardSpecs: ["native"] },
+  "couple-me": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  kindroid: { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "nomi-ai": { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  replika: { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+
+  // Model providers
+  pygmalionai: { accessTags: ["foss", "free", "byok"] },
+  openrouter: { accessTags: ["free", "paid", "byok"] },
+  ollama: { accessTags: ["foss", "free", "byok"] },
+
+  // Image + chat hybrids
+  "ourdream-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  soulgen: { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "promptchan-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "krush-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "ehentai-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "nectar-ai": { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  aiallure: { accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "muah-ai": { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+
+  // Additional ecosystem platforms
+  "backyard-ai": { accessTags: ["free", "paid", "byok"], cardSpecs: ["json", "native"] },
+  "lm-studio": { accessTags: ["free", "byok"] },
+  "open-webui": { accessTags: ["foss", "free", "byok"], cardSpecs: ["json", "native"] },
+  perchance: { accessTags: ["free"], cardSpecs: ["native"] },
+  "mistral-le-chat": { hasMultimodal: true, accessTags: ["free", "paid"], cardSpecs: ["native"] },
+  "tavernai-legacy": { accessTags: ["foss", "free", "byok"], cardSpecs: ["v2", "json"] },
+};
+
+/** Return the structured filter facts for a platform (empty object = unknown). */
+export function getPlatformFilterFacts(bot: Chatbot): PlatformFilterFacts {
+  return platformFilterFacts[bot.slug] ?? {};
+}
 
 export const categoryLabels: Record<Category, string> = {
   local: "Local Frontends",
