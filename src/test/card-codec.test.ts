@@ -234,3 +234,29 @@ describe("helpers", () => {
     expect(emptyPreserved().assets).toEqual([]);
   });
 });
+
+describe("rejecting non-card input (no AI fallback)", () => {
+  it("rejects arbitrary plain text", () => {
+    expect(() => importCard("not valid json")).toThrow(CardImportError);
+  });
+
+  it("rejects valid JSON that is not a card structure", () => {
+    expect(() => importCard({ foo: "bar" })).toThrow(CardImportError);
+    expect(() => importCard({ name: "only a name" })).toThrow(CardImportError);
+  });
+
+  it("rejects non-object JSON primitives", () => {
+    expect(() => importCard([1, 2, 3])).toThrow(CardImportError);
+    expect(() => importCard("a string")).toThrow(CardImportError);
+    expect(() => importCard(42)).toThrow(CardImportError);
+    expect(() => importCard(null)).toThrow(CardImportError);
+  });
+
+  it("leaves the internal model untouched (pure importCard never mutates inputs)", () => {
+    const before = emptyCardData();
+    const json = { name: "x" };
+    expect(() => importCard(json)).toThrow(CardImportError);
+    expect(before).toEqual(emptyCardData());
+    expect(json).toEqual({ name: "x" });
+  });
+});

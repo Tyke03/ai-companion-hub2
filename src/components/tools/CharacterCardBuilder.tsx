@@ -168,7 +168,6 @@ export const CharacterCardBuilder = () => {
   const [copied, setCopied] = useState(false);
   const [generatingField, setGeneratingField] = useState<string | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
-  const [converting, setConverting] = useState(false);
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [pngFile, setPngFile] = useState<File | null>(null);
@@ -413,72 +412,61 @@ export const CharacterCardBuilder = () => {
     if (fileImportRef.current) fileImportRef.current.value = "";
   };
 
-  const handleImport = async () => {
+  const handleImport = () => {
     if (!importText.trim()) {
       toast({ title: "Empty", description: "Paste character data to import.", variant: "destructive" });
       return;
     }
-    setConverting(true);
+
+    // Only accept valid JSON that is a recognizable card.
+    let parsedJson: unknown;
     try {
-      let parsedJson: unknown = null;
-      let isJson = false;
-      try {
-        parsedJson = JSON.parse(importText);
-        isJson = true;
-      } catch { /* not JSON — handled below */ }
-
-      if (isJson) {
-        try {
-          const result = importCard(parsedJson);
-          applyImport(result);
-          toast({
-            title: "Imported",
-            description: result.format === "v1"
-              ? "V1 card loaded — it will export as V2 (upgraded)."
-              : result.format === "v3"
-                ? "V3 draft card loaded."
-                : "V2 character card loaded.",
-          });
-          setShowImport(false); setImportText("");
-          return;
-        } catch (err) {
-          if (!(err instanceof CardImportError)) throw err;
-          // Unrecognized JSON — fall through to AI conversion below.
-          if (!supabase) {
-            toast({
-              title: "Unrecognized card",
-              description: `${err.message} AI conversion is unavailable because Supabase is not configured.`,
-              variant: "destructive",
-            });
-            return;
-          }
-        }
-      }
-
-      if (!supabase) {
-        toast({ title: "Unavailable", description: "AI conversion is unavailable because Supabase is not configured.", variant: "destructive" });
-        return;
-      }
-      const { data, error } = await supabase.functions.invoke("venice-ai", {
-        body: { action: "convert-character", inputText: importText },
+      parsedJson = JSON.parse(importText);
+    } catch {
+      toast({
+        title: "Not valid JSON",
+        description: "This is not a recognized Character Card JSON file. Use V1, V2, or V3-draft card JSON.",
+        variant: "destructive",
       });
-      if (error) throw error;
-      if (data?.result && typeof data.result === "object" && !data.parseError) {
-        try {
-          const result = importCard(data.result);
-          applyImport(result);
-          toast({ title: "Converted", description: "Character data imported and converted." });
-          setShowImport(false); setImportText("");
-        } catch (err) {
-          toast({ title: "Error", description: errMsg(err) || "Conversion result was not a recognizable card.", variant: "destructive" });
-        }
-      } else {
-        toast({ title: "Error", description: "Could not parse the conversion result.", variant: "destructive" });
-      }
+      return;
+    }
+
+    if (typeof parsedJson !== "object" || parsedJson === null) {
+      toast({
+        title: "Not a card",
+        description: "This is not a recognized Character Card JSON file. Use V1, V2, or V3-draft card JSON.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const result = importCard(parsedJson);
+      applyImport(result);
+      toast({
+        title: "Imported",
+        description: result.format === "v1"
+          ? "V1 card loaded — it will export as V2 (upgraded)."
+          : result.format === "v3"
+            ? "V3 draft card loaded."
+            : "V2 character card loaded.",
+      });
+      setShowImport(false);
+      setImportText("");
     } catch (err) {
-      toast({ title: "Error", description: errMsg(err) || "Failed to convert.", variant: "destructive" });
-    } finally {
-      setConverting(false);
+      if (err instanceof CardImportError) {
+        toast({
+          title: "Not a recognized card",
+          description: err.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Import error",
+          description: errMsg(err) || "Failed to import character card.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -615,13 +603,13 @@ export const CharacterCardBuilder = () => {
       {showImport && (
         <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Paste character data in <strong>V1, V2, or V3 JSON</strong> — or plain text for AI conversion. Unrecognized JSON is sent to AI when the backend is available.
+            Paste character data in <strong>V1, V2, or V3-draft JSON</strong>. Unrecognized formats are rejected with a local error.
           </p>
           <Textarea placeholder="Paste character data here..." value={importText} onChange={(e) => setImportText(e.target.value)} className="min-h-[150px] bg-secondary border-border font-mono text-sm" />
           <div className="flex gap-2">
-            <Button onClick={handleImport} disabled={converting || aiUnavailable}>
-              {converting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {converting ? "Converting..." : "Import & Convert"}
+            <Button onClick={handleImport}>
+              <Upload className="h-4 w-4" />
+              Import
             </Button>
             <Button variant="ghost" onClick={() => { setShowImport(false); setImportText(""); }}>Cancel</Button>
           </div>
