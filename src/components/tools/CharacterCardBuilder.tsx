@@ -3,10 +3,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { Copy, Check, Download, Sparkles, Upload, Loader2, Image, Trash2, Plus, AlertTriangle, WifiOff, Settings2, Eye, FileJson } from "lucide-react";
+import { Copy, Check, Download, Sparkles, Upload, Loader2, Image, Trash2, Plus, AlertTriangle, WifiOff, Settings2, Eye, FileJson, Info } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { embedCardInPng, extractCardFromPng } from "@/lib/pngChunk";
+import {
+  importCard,
+  buildV2Envelope,
+  buildV3Envelope,
+  sanitizeFilename,
+  CardImportError,
+} from "@/lib/cardCodec";
+import {
+  CANONICAL_ASSET_TYPES,
+  MAX_JSON_BYTES,
+  MAX_JSON_LABEL,
+  MAX_PNG_BYTES,
+  MAX_PNG_LABEL,
+  emptyCardData,
+  emptyPreserved,
+  type CardAsset,
+  type CardData,
+  type CardFormat,
+  type CardImportResult,
+  type PreservedData,
+} from "@/lib/cardTypes";
 import { useAiBackendStatus } from "@/hooks/useAiBackend";
 import {
   AlertDialog,
@@ -21,36 +42,6 @@ import {
 } from "@/components/ui/alert-dialog";
 
 const errMsg = (err: unknown) => (err instanceof Error ? err.message : String(err));
-
-interface AssetDeclaration { type: "expression" | "audio" | "outfit" | "other"; uri: string; name: string; }
-
-interface CharacterCardData {
-  name: string;
-  description: string;
-  personality: string;
-  scenario: string;
-  first_mes: string;
-  mes_example: string;
-  creator_notes: string;
-  system_prompt: string;
-  post_history_instructions: string;
-  tags: string;
-  creator: string;
-  nickname: string;
-  creator_notes_multilingual: string;
-  /** List-edited fields */
-  source: string[];
-  group_only_greetings: string[];
-  alternate_greetings: string[];
-  character_version: string;
-}
-
-const defaultCard: CharacterCardData = {
-  name: "", description: "", personality: "", scenario: "", first_mes: "",
-  mes_example: "", creator_notes: "", system_prompt: "", post_history_instructions: "",
-  tags: "", creator: "", nickname: "", creator_notes_multilingual: "", source: [],
-  group_only_greetings: [], alternate_greetings: [], character_version: "1.0",
-};
 
 /** Fields whose value is an array of strings (rendered with list editors) */
 const ARRAY_FIELDS = new Set(["source", "group_only_greetings", "alternate_greetings"]);
@@ -90,6 +81,14 @@ function CharCountIndicator({ current, max }: { current: number; max: number }) 
 }
 
 type SpecVersion = "v2" | "v3";
+
+const ASSET_TYPE_LABELS: Record<string, string> = {
+  icon: "Icon / Portrait",
+  background: "Background",
+  user_icon: "User icon",
+  emotion: "Expression sprite",
+  other: "Other",
+};
 
 function ListEditor({
   items, onChange, placeholder, addLabel,
@@ -148,18 +147,27 @@ function toList(value: string): string[] {
 }
 
 export const CharacterCardBuilder = () => {
-  const [card, setCard] = useState<CharacterCardData>(() => {
-    try { return JSON.parse(localStorage.getItem("ai-companion-hub-card-draft") || "null") || defaultCard; } catch { return defaultCard; }
+  const [card, setCard] = useState<CardData>(() => {
+    try {
+      const raw: unknown = JSON.parse(localStorage.getItem("ai-companion-hub-card-draft") || "null");
+      return { ...emptyCardData(), ...(raw && typeof raw === "object" ? (raw as Partial<CardData>) : {}) };
+    } catch { return emptyCardData(); }
   });
+  const [preserved, setPreserved] = useState<PreservedData>(() => {
+    try {
+      const raw: unknown = JSON.parse(localStorage.getItem("ai-companion-hub-card-preserved") || "null");
+      return { ...emptyPreserved(), ...(raw && typeof raw === "object" ? (raw as Partial<PreservedData>) : {}) };
+    } catch { return emptyPreserved(); }
+  });
+  const [importedFormat, setImportedFormat] = useState<CardFormat | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [specVersion, setSpecVersion] = useState<SpecVersion>("v2");
   const [generationMode, setGenerationMode] = useState<"default" | "byok">("default");
   const [showGenerationSettings, setShowGenerationSettings] = useState(false);
   const [previewMode, setPreviewMode] = useState<"json" | "chat">("json");
-  const [assets, setAssets] = useState<AssetDeclaration[]>([]);
   const [copied, setCopied] = useState(false);
   const [generatingField, setGeneratingField] = useState<string | null>(null);
   const [generatingAll, setGeneratingAll] = useState(false);
-  const [converting, setConverting] = useState(false);
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [pngFile, setPngFile] = useState<File | null>(null);
@@ -169,9 +177,20 @@ export const CharacterCardBuilder = () => {
   const ai = useAiBackendStatus();
   const aiUnavailable = ai.status === "unavailable";
 
-  useEffect(() => { localStorage.setItem("ai-companion-hub-card-draft", JSON.stringify(card)); }, [card]);
+  useEffect(() => {
+    try { localStorage.setItem("ai-companion-hub-card-draft", JSON.stringify(card)); } catch { /* quota */ }
+  }, [card]);
+
+  useEffect(() => {
+    try { localStorage.setItem("ai-companion-hub-card-preserved", JSON.stringify(preserved)); } catch { /* quota */ }
+  }, [preserved]);
 
   const pngPreviewUrl = useMemo(() => pngFile ? URL.createObjectURL(pngFile) : null, [pngFile]);
+
+  // Revoke object URLs when replaced or on unmount.
+  useEffect(() => {
+    return () => { if (pngPreviewUrl) URL.revokeObjectURL(pngPreviewUrl); };
+  }, [pngPreviewUrl]);
 
   const multilingual = useMemo(() => {
     const text = card.creator_notes_multilingual;
@@ -187,70 +206,80 @@ export const CharacterCardBuilder = () => {
     }
   }, [card.creator_notes_multilingual]);
 
-  const updateField = (field: keyof CharacterCardData, value: string) => {
+  const updateField = (field: keyof CardData, value: string) => {
     setCard((prev) => ({ ...prev, [field]: value }));
   };
 
-  const updateList = (field: keyof CharacterCardData, items: string[]) => {
+  const updateList = (field: keyof CardData, items: string[]) => {
     setCard((prev) => ({ ...prev, [field]: items }));
   };
 
-  const generateV2Json = () => ({
-    spec: "chara_card_v2",
-    spec_version: "2.0",
-    data: {
-      name: card.name, description: card.description, personality: card.personality,
-      scenario: card.scenario, first_mes: card.first_mes, mes_example: card.mes_example,
-      creator_notes: card.creator_notes, system_prompt: card.system_prompt,
-      post_history_instructions: card.post_history_instructions,
-      alternate_greetings: card.alternate_greetings.filter((g) => g.trim()),
-      tags: card.tags.split(",").map((t) => t.trim()).filter(Boolean),
-      creator: card.creator, character_version: card.character_version.trim() || "1.0", extensions: {},
-    },
-  });
+  /** Current export envelope for the selected spec version, built by the codec. */
+  const currentExport = useMemo(() => {
+    if (specVersion === "v3") return buildV3Envelope(card, preserved);
+    return buildV2Envelope(card, preserved);
+  }, [specVersion, card, preserved]);
 
-  const generateV3Json = () => ({
-    spec: "chara_card_v3",
-    spec_version: "3.0",
-    data: {
-      name: card.name, description: card.description, personality: card.personality,
-      scenario: card.scenario, first_mes: card.first_mes, mes_example: card.mes_example,
-      creator_notes: card.creator_notes, system_prompt: card.system_prompt,
-      post_history_instructions: card.post_history_instructions,
-      alternate_greetings: card.alternate_greetings.filter((g) => g.trim()),
-      tags: card.tags.split(",").map((t) => t.trim()).filter(Boolean),
-      creator: card.creator, character_version: card.character_version.trim() || "1.0", extensions: {},
-      nickname: card.nickname || undefined,
-      creation_date: Math.floor(Date.now() / 1000),
-      modification_date: Math.floor(Date.now() / 1000),
-      group_only_greetings: card.group_only_greetings.filter((g) => g.trim()),
-      source: card.source.filter((s) => s.trim()),
-      creator_notes_multilingual: multilingual.valid ? multilingual.value : undefined,
-      assets: assets.filter((asset) => asset.name.trim() || asset.uri.trim()),
-    },
-  });
+  /** Import-time + export-time notices that must be visible to the user. */
+  const preservationNotices = useMemo(() => {
+    const notices: string[] = [];
+    if (preserved.character_book !== undefined) notices.push("Character book preserved but not editable here.");
+    const unknownCount = Object.keys(preserved.unknownDataFields).length;
+    if (unknownCount > 0) notices.push(`${unknownCount} unsupported field(s) will be preserved unchanged.`);
+    if (preserved.preservedAssets.length > 0) notices.push(`${preserved.preservedAssets.length} preserved asset(s) are not editable here.`);
+    return notices;
+  }, [preserved]);
 
-  const getCardJson = () => (specVersion === "v3" ? generateV3Json() : generateV2Json());
+  const allNotices = useMemo(() => {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const notice of [...importWarnings, ...preservationNotices, ...currentExport.warnings]) {
+      if (seen.has(notice)) continue;
+      seen.add(notice);
+      out.push(notice);
+    }
+    return out;
+  }, [importWarnings, preservationNotices, currentExport.warnings]);
+
+  const toastWarnings = (warnings: string[]) => {
+    if (warnings.length === 0) return;
+    const preview = warnings.slice(0, 3).join(" · ");
+    toast({
+      title: "Export notes",
+      description: warnings.length > 3 ? `${preview} (+${warnings.length - 3} more)` : preview,
+    });
+  };
+
+  const applyImport = (result: CardImportResult) => {
+    setCard(result.data);
+    setPreserved(result.preserved);
+    setImportedFormat(result.format);
+    setImportWarnings(result.warnings);
+    setSpecVersion(result.format === "v3" ? "v3" : "v2");
+  };
+
   const permanentTokens = [card.name, card.description, card.personality, card.scenario].reduce((sum, value) => sum + Math.ceil(value.trim().split(/\s+/).filter(Boolean).length * 1.3), 0);
   const variableTokens = [card.first_mes, card.mes_example].reduce((sum, value) => sum + Math.ceil(value.trim().split(/\s+/).filter(Boolean).length * 1.3), 0);
   const totalTokens = permanentTokens + variableTokens;
   const renderGreeting = (): ReactNode => card.first_mes.split(/(\*[^*]+\*|"[^"]+")/g).filter(Boolean).map((part, index) => part.startsWith("*") && part.endsWith("*") ? <em key={index} className="text-muted-foreground">{part}</em> : part.startsWith('"') && part.endsWith('"') ? <strong key={index} className="text-foreground">{part}</strong> : <span key={index}>{part}</span>);
 
   const handleCopyJson = () => {
-    navigator.clipboard.writeText(JSON.stringify(getCardJson(), null, 2));
+    navigator.clipboard.writeText(JSON.stringify(currentExport.envelope, null, 2));
+    toastWarnings(currentExport.warnings);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleDownloadJson = () => {
-    const json = JSON.stringify(getCardJson(), null, 2);
+    const json = JSON.stringify(currentExport.envelope, null, 2);
     const blob = new Blob([json], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${card.name || "character"}_${specVersion}.json`;
+    a.download = `${sanitizeFilename(card.name || "character")}_${specVersion}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    toastWarnings(currentExport.warnings);
     toast({ title: "Downloaded", description: `Character card ${specVersion.toUpperCase()} JSON downloaded.` });
   };
 
@@ -259,23 +288,32 @@ export const CharacterCardBuilder = () => {
       toast({ title: "No image", description: "Upload a PNG image first to embed the card.", variant: "destructive" });
       return;
     }
+    if (pngFile.size > MAX_PNG_BYTES) {
+      toast({ title: "File too large", description: `PNG embedding limit is ${MAX_PNG_LABEL}.`, variant: "destructive" });
+      return;
+    }
     try {
       const chunkName = specVersion === "v3" ? "ccv3" : "chara";
-      const cardJson = getCardJson();
-      const blob = await embedCardInPng(pngFile, cardJson, chunkName as "chara" | "ccv3");
+      const blob = await embedCardInPng(pngFile, currentExport.envelope, chunkName);
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${card.name || "character"}_${specVersion}.png`;
+      a.download = `${sanitizeFilename(card.name || "character")}_${specVersion}.png`;
       a.click();
       URL.revokeObjectURL(url);
-      toast({ title: "Downloaded", description: `Card embedded in PNG as ${chunkName} chunk.` });
+      toastWarnings(currentExport.warnings);
+      toast({
+        title: "Downloaded",
+        description: specVersion === "v3"
+          ? "Card embedded as ccv3 (V3 draft) chunk; any legacy chara chunk was replaced."
+          : "Card embedded as chara chunk; any ccv3 chunk was replaced.",
+      });
     } catch (err) {
       toast({ title: "Error", description: errMsg(err) || "Failed to embed card in PNG.", variant: "destructive" });
     }
   };
 
-  const handleGenerateField = async (fieldName: keyof CharacterCardData) => {
+  const handleGenerateField = async (fieldName: keyof CardData) => {
     if (!supabase) {
       toast({ title: "Unavailable", description: "AI generation is unavailable because Supabase is not configured.", variant: "destructive" });
       return;
@@ -342,20 +380,31 @@ export const CharacterCardBuilder = () => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.type === "image/png") {
+      if (file.size > MAX_PNG_BYTES) {
+        toast({ title: "File too large", description: `PNG import limit is ${MAX_PNG_LABEL}.`, variant: "destructive" });
+        return;
+      }
       const bytes = new Uint8Array(await file.arrayBuffer());
       const extracted = extractCardFromPng(bytes);
-      if (extracted) {
-        const nestedData = extracted.data.data;
-        const parsed = nestedData && typeof nestedData === "object" && !Array.isArray(nestedData)
-          ? nestedData as Record<string, unknown>
-          : extracted.data;
-        applyParsedCard(parsed);
-        toast({ title: "Imported", description: `Extracted ${extracted.chunkName} card from PNG.` });
-        setPngFile(file);
-      } else {
+      if (extracted.status === "ok") {
+        try {
+          const result = importCard(extracted.data);
+          applyImport(result);
+          toast({ title: "Imported", description: `Extracted ${extracted.chunkName} card from PNG.` });
+          setPngFile(file);
+        } catch (err) {
+          toast({ title: "Error", description: errMsg(err) || "Failed to parse embedded card.", variant: "destructive" });
+        }
+      } else if (extracted.status === "no-card") {
         toast({ title: "No card found", description: "This PNG doesn't contain an embedded character card.", variant: "destructive" });
+      } else {
+        toast({ title: "Invalid PNG", description: extracted.reason, variant: "destructive" });
       }
     } else {
+      if (file.size > MAX_JSON_BYTES) {
+        toast({ title: "File too large", description: `Text/JSON import limit is ${MAX_JSON_LABEL}.`, variant: "destructive" });
+        return;
+      }
       const text = await file.text();
       setImportText(text);
       setShowImport(true);
@@ -363,81 +412,74 @@ export const CharacterCardBuilder = () => {
     if (fileImportRef.current) fileImportRef.current.value = "";
   };
 
-  const applyParsedCard = (parsed: Record<string, unknown> | null | undefined) => {
-    if (!parsed) return;
-    setCard((prev) => {
-      const updated = { ...prev };
-      for (const key of Object.keys(defaultCard)) {
-        const value = parsed[key];
-        if (value === undefined) continue;
-        const record = updated as Record<string, unknown>;
-        if (ARRAY_FIELDS.has(key)) {
-          if (Array.isArray(value)) record[key] = value.map((v) => String(v).trim()).filter(Boolean);
-          else if (typeof value === "string") record[key] = toList(value);
-        } else if (typeof value === "string") {
-          record[key] = value;
-        } else if (typeof value === "number" && key === "character_version") {
-          record[key] = String(value);
-        }
-      }
-      return updated;
-    });
-  };
-
-  const handleImport = async () => {
+  const handleImport = () => {
     if (!importText.trim()) {
       toast({ title: "Empty", description: "Paste character data to import.", variant: "destructive" });
       return;
     }
-    setConverting(true);
-    try {
-      let parsed: Record<string, unknown> | null = null;
-      try {
-        parsed = JSON.parse(importText);
-        if (parsed?.spec === "chara_card_v3" && parsed?.data) {
-          applyParsedCard(parsed.data as Record<string, unknown>);
-          setSpecVersion("v3");
-          toast({ title: "Imported", description: "V3 character card loaded." });
-          setShowImport(false); setImportText(""); return;
-        }
-        if (parsed?.data) parsed = parsed.data as Record<string, unknown>;
-        if (parsed?.name || parsed?.description || parsed?.personality) {
-          applyParsedCard(parsed);
-          toast({ title: "Imported", description: "Character data loaded from JSON." });
-          setShowImport(false); setImportText(""); return;
-        }
-      } catch { /* Not JSON — send to AI */ }
 
-      if (!supabase) {
-        toast({ title: "Unavailable", description: "AI conversion is unavailable because Supabase is not configured.", variant: "destructive" });
-        return;
-      }
-      const { data, error } = await supabase.functions.invoke("venice-ai", {
-        body: { action: "convert-character", inputText: importText },
+    // Only accept valid JSON that is a recognizable card.
+    let parsedJson: unknown;
+    try {
+      parsedJson = JSON.parse(importText);
+    } catch {
+      toast({
+        title: "Not valid JSON",
+        description: "This is not a recognized Character Card JSON file. Use V1, V2, or V3-draft card JSON.",
+        variant: "destructive",
       });
-      if (error) throw error;
-      if (data?.result && typeof data.result === "object" && !data.parseError) {
-        applyParsedCard(data.result);
-        toast({ title: "Converted", description: "Character data imported and converted." });
-        setShowImport(false); setImportText("");
-      } else {
-        toast({ title: "Error", description: "Could not parse the conversion result.", variant: "destructive" });
-      }
+      return;
+    }
+
+    if (typeof parsedJson !== "object" || parsedJson === null) {
+      toast({
+        title: "Not a card",
+        description: "This is not a recognized Character Card JSON file. Use V1, V2, or V3-draft card JSON.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      const result = importCard(parsedJson);
+      applyImport(result);
+      toast({
+        title: "Imported",
+        description: result.format === "v1"
+          ? "V1 card loaded — it will export as V2 (upgraded)."
+          : result.format === "v3"
+            ? "V3 draft card loaded."
+            : "V2 character card loaded.",
+      });
+      setShowImport(false);
+      setImportText("");
     } catch (err) {
-      toast({ title: "Error", description: errMsg(err) || "Failed to convert.", variant: "destructive" });
-    } finally {
-      setConverting(false);
+      if (err instanceof CardImportError) {
+        toast({
+          title: "Not a recognized card",
+          description: err.message,
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Import error",
+          description: errMsg(err) || "Failed to import character card.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
   const handleClearAll = () => {
-    setCard(defaultCard);
-    setAssets([]);
+    setCard(emptyCardData());
+    setPreserved(emptyPreserved());
+    setImportedFormat(null);
+    setImportWarnings([]);
     setPngFile(null);
     toast({ title: "Cleared", description: "All fields have been reset." });
   };
 
-  const v2Fields: { key: keyof CharacterCardData; label: string; multiline?: boolean; placeholder: string }[] = [
+  const v2Fields: { key: keyof CardData; label: string; multiline?: boolean; placeholder: string }[] = [
     { key: "name", label: "Character Name", placeholder: "Luna Starweaver" },
     { key: "creator", label: "Creator", placeholder: "Your name or handle" },
     { key: "character_version", label: "Character Version", placeholder: "1.0" },
@@ -452,19 +494,21 @@ export const CharacterCardBuilder = () => {
     { key: "tags", label: "Tags (comma-separated)", placeholder: "fantasy, romance, nsfw, sorceress, original character" },
   ];
 
-  const v3ExtraFields: { key: keyof CharacterCardData; label: string; multiline?: boolean; placeholder: string }[] = [
+  const v3ExtraFields: { key: keyof CardData; label: string; multiline?: boolean; placeholder: string }[] = [
     { key: "nickname", label: "Nickname", placeholder: "Luna, Star" },
   ];
 
   const fields = specVersion === "v3" ? [...v2Fields, ...v3ExtraFields] : v2Fields;
-  const generatableFields = new Set(Object.keys(defaultCard).filter((k) => k !== "creator" && k !== "character_version"));
+  const generatableFields = new Set(Object.keys(emptyCardData()).filter((k) => k !== "creator" && k !== "character_version"));
+
+  const updateAssets = (next: CardAsset[]) => setPreserved((prev) => ({ ...prev, assets: next }));
 
   return (
     <div className="max-w-3xl space-y-6">
       <div>
         <h2 className="font-display text-xl font-semibold text-foreground mb-2">Character Card Builder</h2>
         <p className="text-sm text-muted-foreground">
-          Create V2/V3 character cards, import from any format, export as JSON or PNG with embedded data, and use AI to generate or enhance fields.
+          Import V1/V2/V3 cards, export validated V2 JSON/PNG or V3 draft JSON/PNG with embedded data, and use AI to generate or enhance fields.
         </p>
       </div>
 
@@ -492,11 +536,32 @@ export const CharacterCardBuilder = () => {
       <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3">
         <span className={`text-sm font-medium ${specVersion === "v2" ? "text-foreground" : "text-muted-foreground"}`}>V2</span>
         <Switch checked={specVersion === "v3"} onCheckedChange={(checked) => setSpecVersion(checked ? "v3" : "v2")} />
-        <span className={`text-sm font-medium ${specVersion === "v3" ? "text-foreground" : "text-muted-foreground"}`}>V3</span>
+        <span className={`text-sm font-medium ${specVersion === "v3" ? "text-foreground" : "text-muted-foreground"}`}>V3 (draft)</span>
         <span className="text-xs text-muted-foreground ml-2">
-          {specVersion === "v3" ? "chara_card_v3 — includes nickname, source, assets, multilingual notes" : "chara_card_v2 — universal compatibility"}
+          {specVersion === "v3"
+            ? "chara_card_v3 (draft spec) — includes nickname, source, assets, multilingual notes. May not be fully supported by all frontends."
+            : "chara_card_v2 — stable, widely supported"}
         </span>
       </div>
+
+      {/* Imported format badge + preservation / export notices */}
+      {(importedFormat || allNotices.length > 0) && (
+        <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3 space-y-1.5">
+          {importedFormat && (
+            <p className="text-sm font-medium text-foreground">
+              {importedFormat === "v1" && "Imported as V1 — this card will export as V2 (upgraded)."}
+              {importedFormat === "v2" && "Imported as V2 character card."}
+              {importedFormat === "v3" && "Imported as V3 draft character card."}
+            </p>
+          )}
+          {allNotices.map((notice, index) => (
+            <p key={index} className="flex items-start gap-1.5 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              {notice}
+            </p>
+          ))}
+        </div>
+      )}
 
       {/* Top action bar */}
       <div className="flex flex-wrap gap-3">
@@ -538,13 +603,13 @@ export const CharacterCardBuilder = () => {
       {showImport && (
         <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
           <p className="text-sm text-muted-foreground">
-            Paste character data in <strong>any format</strong> — JSON, V2, V3, Character.AI, W++, SBF, Pygmalion, YAML, or plain text. AI will parse and map everything.
+            Paste character data in <strong>V1, V2, or V3-draft JSON</strong>. Unrecognized formats are rejected with a local error.
           </p>
           <Textarea placeholder="Paste character data here..." value={importText} onChange={(e) => setImportText(e.target.value)} className="min-h-[150px] bg-secondary border-border font-mono text-sm" />
           <div className="flex gap-2">
-            <Button onClick={handleImport} disabled={converting || aiUnavailable}>
-              {converting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              {converting ? "Converting..." : "Import & Convert"}
+            <Button onClick={handleImport}>
+              <Upload className="h-4 w-4" />
+              Import
             </Button>
             <Button variant="ghost" onClick={() => { setShowImport(false); setImportText(""); }}>Cancel</Button>
           </div>
@@ -619,9 +684,26 @@ export const CharacterCardBuilder = () => {
               />
             </div>
             <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-              <div><p className="text-sm font-medium text-foreground">Assets (V3)</p><p className="text-xs text-muted-foreground">Declare optional files without uploading them: expression sprites, greeting audio, alternate outfits, or other frontend assets.</p></div>
-              {assets.map((asset, index) => <div key={index} className="grid gap-2 sm:grid-cols-[140px_1fr_1fr_auto]"><select value={asset.type} onChange={(event) => setAssets((previous) => previous.map((item, i) => i === index ? { ...item, type: event.target.value as AssetDeclaration["type"] } : item))} className="h-10 rounded-md border border-border bg-secondary px-2 text-sm"><option value="expression">Expression sprite</option><option value="audio">Greeting audio</option><option value="outfit">Alternate outfit</option><option value="other">Other</option></select><Input value={asset.name} onChange={(event) => setAssets((previous) => previous.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} placeholder="Asset name" className="bg-secondary" /><Input value={asset.uri} onChange={(event) => setAssets((previous) => previous.map((item, i) => i === index ? { ...item, uri: event.target.value } : item))} placeholder="assets/expressions/happy.png" className="bg-secondary" /><Button variant="ghost" size="sm" onClick={() => setAssets((previous) => previous.filter((_, i) => i !== index))} className="text-destructive"><Trash2 className="h-4 w-4" /></Button></div>)}
-              <Button variant="outline" size="sm" onClick={() => setAssets((previous) => [...previous, { type: "expression", name: "", uri: "" }])}><Plus className="h-4 w-4" /> Add asset declaration</Button>
+              <div><p className="text-sm font-medium text-foreground">Assets (V3 draft)</p><p className="text-xs text-muted-foreground">Declare optional files without uploading them. Each asset needs a spec type, name, URI, and lowercase file extension (e.g. png).</p></div>
+              {preserved.assets.map((asset, index) => (
+                <div key={index} className="grid gap-2 sm:grid-cols-[150px_1fr_1fr_90px_auto]">
+                  <select
+                    value={asset.type}
+                    onChange={(event) => updateAssets(preserved.assets.map((item, i) => i === index ? { ...item, type: event.target.value } : item))}
+                    className="h-10 rounded-md border border-border bg-secondary px-2 text-sm"
+                    aria-label={`Asset ${index + 1} type`}
+                  >
+                    {CANONICAL_ASSET_TYPES.map((type) => (
+                      <option key={type} value={type}>{ASSET_TYPE_LABELS[type]}</option>
+                    ))}
+                  </select>
+                  <Input value={asset.name} onChange={(event) => updateAssets(preserved.assets.map((item, i) => i === index ? { ...item, name: event.target.value } : item))} placeholder="Asset name" className="bg-secondary" aria-label={`Asset ${index + 1} name`} />
+                  <Input value={asset.uri} onChange={(event) => updateAssets(preserved.assets.map((item, i) => i === index ? { ...item, uri: event.target.value } : item))} placeholder="assets/expressions/happy.png" className="bg-secondary" aria-label={`Asset ${index + 1} URI`} />
+                  <Input value={asset.ext} onChange={(event) => updateAssets(preserved.assets.map((item, i) => i === index ? { ...item, ext: event.target.value.toLowerCase().replace(/[^a-z0-9]/g, "") } : item))} placeholder="png" className="bg-secondary" aria-label={`Asset ${index + 1} extension`} />
+                  <Button variant="ghost" size="sm" onClick={() => updateAssets(preserved.assets.filter((_, i) => i !== index))} className="text-destructive" aria-label={`Remove asset ${index + 1}`}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" onClick={() => updateAssets([...preserved.assets, { type: "icon", name: "", uri: "", ext: "png" }])}><Plus className="h-4 w-4" /> Add asset declaration</Button>
             </div>
           </>
         )}
@@ -666,7 +748,7 @@ export const CharacterCardBuilder = () => {
       <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
         <p className="text-sm font-medium text-foreground">PNG Image for Card Embedding</p>
         <p className="text-xs text-muted-foreground">
-          Upload a character portrait PNG to export as an embedded card (used by SillyTavern, RisuAI, etc.)
+          Upload a character portrait PNG (max {MAX_PNG_LABEL}) to export as an embedded card (used by SillyTavern, RisuAI, etc.)
         </p>
         <input ref={pngInputRef} type="file" accept="image/png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setPngFile(f); }} />
         <div className="flex items-center gap-3">
@@ -687,7 +769,7 @@ export const CharacterCardBuilder = () => {
       <div className="flex flex-wrap gap-3">
         <Button onClick={handleCopyJson}>
           {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-          {copied ? "Copied!" : `Copy ${specVersion.toUpperCase()} JSON`}
+          {copied ? "Copied!" : `Copy ${specVersion === "v3" ? "V3 (draft)" : "V2"} JSON`}
         </Button>
         <Button variant="outline" onClick={handleDownloadJson}>
           <Download className="h-4 w-4" /> Download JSON
@@ -701,7 +783,7 @@ export const CharacterCardBuilder = () => {
       {card.name && (
         <div>
           <div className="mb-2 flex items-center justify-between"><h3 className="font-display font-semibold text-foreground">Live preview</h3><div className="flex gap-2"><Button variant={previewMode === "json" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("json")}><FileJson className="h-4 w-4" /> JSON</Button><Button variant={previewMode === "chat" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("chat")}><Eye className="h-4 w-4" /> Chat bubble</Button></div></div>
-          {previewMode === "json" ? <><div className="mb-3 rounded-lg border border-border bg-secondary/30 p-3"><div className="mb-2 flex justify-between text-xs"><span>Permanent: {permanentTokens}</span><span>Variable: {variableTokens}</span><span>Total: {totalTokens}</span></div><div className="flex h-3 overflow-hidden rounded-full bg-secondary"><div className="bg-primary" style={{ width: `${Math.min(100, totalTokens ? permanentTokens / totalTokens * 100 : 0)}%` }} /><div className="bg-sky-500" style={{ width: `${Math.min(100, totalTokens ? variableTokens / totalTokens * 100 : 0)}%` }} /></div><p className={`mt-2 text-xs ${permanentTokens > 2048 ? "text-destructive" : "text-muted-foreground"}`}>{permanentTokens > 2048 ? "Warning: permanent definition exceeds 2,048 tokens." : `Recommended context buffer: approximately ${Math.max(0, 2048 - permanentTokens).toLocaleString()} tokens remaining.`}</p></div><pre className="rounded-lg border border-border bg-secondary/50 p-4 text-xs text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">{JSON.stringify(getCardJson(), null, 2)}</pre></> : <div className="rounded-xl border border-border bg-card p-5"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">{card.name.slice(0, 1).toUpperCase()}</div><div><p className="font-semibold text-foreground">{card.name}</p><p className="text-xs text-muted-foreground">Opening scene</p></div></div><div className="max-w-2xl rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">{renderGreeting()}</div></div>}
+          {previewMode === "json" ? <><div className="mb-3 rounded-lg border border-border bg-secondary/30 p-3"><div className="mb-2 flex justify-between text-xs"><span>Permanent: {permanentTokens}</span><span>Variable: {variableTokens}</span><span>Total: {totalTokens}</span></div><div className="flex h-3 overflow-hidden rounded-full bg-secondary"><div className="bg-primary" style={{ width: `${Math.min(100, totalTokens ? permanentTokens / totalTokens * 100 : 0)}%` }} /><div className="bg-sky-500" style={{ width: `${Math.min(100, totalTokens ? variableTokens / totalTokens * 100 : 0)}%` }} /></div><p className={`mt-2 text-xs ${permanentTokens > 2048 ? "text-destructive" : "text-muted-foreground"}`}>{permanentTokens > 2048 ? "Warning: permanent definition exceeds 2,048 tokens." : `Recommended context buffer: approximately ${Math.max(0, 2048 - permanentTokens).toLocaleString()} tokens remaining.`}</p></div><pre className="rounded-lg border border-border bg-secondary/50 p-4 text-xs text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">{JSON.stringify(currentExport.envelope, null, 2)}</pre></> : <div className="rounded-xl border border-border bg-card p-5"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">{card.name.slice(0, 1).toUpperCase()}</div><div><p className="font-semibold text-foreground">{card.name}</p><p className="text-xs text-muted-foreground">Opening scene</p></div></div><div className="max-w-2xl rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">{renderGreeting()}</div></div>}
         </div>
       )}
     </div>
