@@ -57,11 +57,11 @@ describe("Directory page", () => {
   it("renders the new taxonomy, content levels, and added platforms", () => {
     renderPage(<Index />);
     expect(screen.getByText("NSFW AI Chatbot Directory")).toBeInTheDocument();
-    // New six-category taxonomy — category filter buttons
-    expect(screen.getByRole("button", { name: /Local Frontends/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Hosted RP Platforms/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Companion Apps/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Model Providers/ })).toBeInTheDocument();
+    // New six-category taxonomy — category single-select controls
+    expect(screen.getByRole("radio", { name: /Local Frontends/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Hosted RP Platforms/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Companion Apps/ })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: /Model Providers/ })).toBeInTheDocument();
     // Newly added platforms
     expect(screen.getByText("Kindroid")).toBeInTheDocument();
     expect(screen.getByText("OpenRouter")).toBeInTheDocument();
