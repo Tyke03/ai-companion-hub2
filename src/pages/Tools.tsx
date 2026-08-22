@@ -1,12 +1,15 @@
 import { Layout } from "@/components/Layout";
 import { Wrench, BookOpen, UserRound, Network } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DocConsolidator } from "@/components/tools/DocConsolidator";
 import { CharacterCardBuilder } from "@/components/tools/CharacterCardBuilder";
 import { PromptBuilder } from "@/components/tools/PromptBuilder";
 
 const Tools = () => {
+  const [searchParams] = useSearchParams();
+  const defaultTab = searchParams.get("tab") === "prompts" ? "prompts" : "consolidator";
+
   return (
     <Layout>
       <header className="border-b border-border">
@@ -32,7 +35,7 @@ const Tools = () => {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <Tabs defaultValue="consolidator" className="w-full">
+        <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList className="w-full justify-start bg-secondary border border-border rounded-lg p-1 mb-8 overflow-x-auto">
             <TabsTrigger value="consolidator" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-4 py-2 text-sm font-medium">
               📄 Doc Consolidator

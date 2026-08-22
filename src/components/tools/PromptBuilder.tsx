@@ -1,16 +1,25 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Copy, Check, Sparkles, Upload, Loader2, Wand2, WifiOff } from "lucide-react";
-import { promptTemplates, type PromptTemplate } from "@/data/promptTemplates";
+import {
+  getPrimaryCompatibility,
+  normalizeLocalTemplates,
+  promptTemplates,
+  renderPromptTemplate,
+  type PromptTemplate,
+} from "@/data/promptTemplates";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useAiBackendStatus } from "@/hooks/useAiBackend";
 
+const customKey = "ai-companion-hub-custom-prompts";
 const errMsg = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
 export const PromptBuilder = () => {
+  const [customTemplates, setCustomTemplates] = useState<PromptTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<PromptTemplate>(promptTemplates[0]);
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState(false);
@@ -21,25 +30,45 @@ export const PromptBuilder = () => {
   const [showRawContext, setShowRawContext] = useState(false);
   const [rawContext, setRawContext] = useState("");
   const { toast } = useToast();
+  const [searchParams] = useSearchParams();
   const ai = useAiBackendStatus();
   const aiUnavailable = ai.status === "unavailable";
+  const allTemplates = useMemo(() => [...promptTemplates, ...customTemplates], [customTemplates]);
+  const compatibility = getPrimaryCompatibility(selectedTemplate);
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(customKey) || "[]");
+      setCustomTemplates(normalizeLocalTemplates(stored));
+    } catch {
+      setCustomTemplates([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    const requestedId = searchParams.get("template");
+    if (!requestedId) return;
+    const requestedTemplate = allTemplates.find((template) => template.id === requestedId);
+    if (requestedTemplate && requestedTemplate.id !== selectedTemplate.id) {
+      setSelectedTemplate(requestedTemplate);
+      setVariables({});
+    }
+  }, [allTemplates, searchParams, selectedTemplate.id]);
 
   const handleSelectTemplate = (template: PromptTemplate) => {
     setSelectedTemplate(template);
     setVariables({});
+    setCopied(false);
   };
 
-  const getRenderedPrompt = () => {
-    let result = selectedTemplate.template;
-    for (const v of selectedTemplate.variables) {
-      const value = variables[v.name] || v.placeholder;
-      result = result.split(`{{${v.name}}}`).join(value);
-    }
-    return result;
-  };
+  const getRenderedPrompt = () => renderPromptTemplate(selectedTemplate, variables);
+  const hasUnresolvedPlaceholders = selectedTemplate.variables.some(
+    (variable) => !variables[variable.name]?.trim() && !variable.placeholder.trim(),
+  );
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(getRenderedPrompt());
+  const handleCopy = async () => {
+    if (hasUnresolvedPlaceholders) return;
+    await navigator.clipboard.writeText(getRenderedPrompt());
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -63,9 +92,7 @@ export const PromptBuilder = () => {
         },
       });
       if (error) throw error;
-      if (data?.result) {
-        setVariables((prev) => ({ ...prev, [varName]: data.result }));
-      }
+      if (data?.result) setVariables((prev) => ({ ...prev, [varName]: data.result }));
     } catch (err) {
       toast({ title: "Error", description: errMsg(err) || "Failed to generate.", variant: "destructive" });
     } finally {
@@ -117,7 +144,6 @@ export const PromptBuilder = () => {
       let parsed = JSON.parse(importText);
       if (parsed?.data) parsed = parsed.data;
 
-      // Map character card fields to template variables
       const mapping: Record<string, string[]> = {
         character_name: ["name"],
         character_role: ["personality"],
@@ -135,12 +161,12 @@ export const PromptBuilder = () => {
       };
 
       const newVars: Record<string, string> = {};
-      for (const v of selectedTemplate.variables) {
-        const sources = mapping[v.name];
+      for (const variable of selectedTemplate.variables) {
+        const sources = mapping[variable.name];
         if (sources) {
-          for (const src of sources) {
-            if (parsed[src] && typeof parsed[src] === "string" && parsed[src].trim()) {
-              newVars[v.name] = parsed[src].substring(0, 200);
+          for (const source of sources) {
+            if (parsed[source] && typeof parsed[source] === "string" && parsed[source].trim()) {
+              newVars[variable.name] = parsed[source].substring(0, 200);
               break;
             }
           }
@@ -163,182 +189,114 @@ export const PromptBuilder = () => {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h2 className="font-display text-xl font-semibold text-foreground mb-2">
-          Prompt Builder
-        </h2>
+        <h2 className="mb-2 font-display text-xl font-semibold text-foreground">Prompt Builder</h2>
         <p className="text-sm text-muted-foreground">
-          Fill in template variables to generate roleplay system prompts, unrestricted prompts, character intros, scenarios, and lorebook entries. Use AI to generate any variable, or populate from a character card.
+          Fill author fields to create roleplay system prompts, scenarios, style guides, and lorebook drafts. Verified runtime macros are preserved literally for their target platform.
         </p>
       </div>
 
-      {/* AI backend status banner */}
       {ai.status === "checking" && (
         <div className="flex items-center gap-2 rounded-lg border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Checking AI backend...
+          <Loader2 className="h-4 w-4 animate-spin" /> Checking AI backend...
         </div>
       )}
       {aiUnavailable && (
         <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
-          <WifiOff className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+          <WifiOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
           <div className="text-sm">
             <p className="font-medium text-amber-300">AI backend unavailable</p>
-            <p className="text-muted-foreground">
-              Manual template filling, populating from a character card, and copying prompts still work. AI generation is disabled until the backend is reachable again.
-            </p>
+            <p className="text-muted-foreground">Manual template filling, character-card population, and copying still work. AI generation is disabled until the backend is reachable again.</p>
             {ai.reason && <p className="mt-1 text-xs text-muted-foreground/80">{ai.reason}</p>}
           </div>
         </div>
       )}
 
-      {/* Template selector */}
       <div>
-        <label className="text-sm font-medium text-foreground mb-2 block">Select Template</label>
+        <label className="mb-2 block text-sm font-medium text-foreground">Select Template</label>
         <div className="flex flex-wrap gap-2">
-          {promptTemplates.map((t) => (
+          {allTemplates.map((template) => (
             <button
-              key={t.id}
-              onClick={() => handleSelectTemplate(t)}
-              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                selectedTemplate.id === t.id
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border bg-secondary text-muted-foreground hover:text-foreground"
-              }`}
+              key={template.id}
+              type="button"
+              onClick={() => handleSelectTemplate(template)}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${selectedTemplate.id === template.id ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}
             >
-              {t.name}
+              {template.name}{template.userCreated ? " · Local" : ""}
             </button>
           ))}
         </div>
         <p className="mt-2 text-xs text-muted-foreground">{selectedTemplate.description}</p>
       </div>
 
-      {/* Populate from card / Raw context */}
+      <div className="rounded-lg border border-border bg-secondary/20 p-4">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="rounded-full border border-border px-2 py-1 font-medium text-foreground">{compatibility.target}</span>
+          <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">{compatibility.artifactType}</span>
+          <span className="rounded-full border border-border px-2 py-1 text-muted-foreground">{compatibility.format === "plain-text" ? "Plain text" : "Platform-native"}</span>
+          {compatibility.lane === "verified-platform" && <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-emerald-400">Confidence: Verified</span>}
+        </div>
+        <p className="mt-3 text-sm text-muted-foreground">{compatibility.pasteInstructions}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Runtime macros: {compatibility.runtimeMacros.length > 0 ? compatibility.runtimeMacros.join(", ") : "None"}
+        </p>
+        {compatibility.caveats?.map((caveat) => <p key={caveat} className="mt-1 text-xs text-amber-300/90">Note: {caveat}</p>)}
+      </div>
+
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => setShowImport(!showImport)}>
-          <Upload className="h-4 w-4" />
-          Populate from Card / JSON
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setShowRawContext(!showRawContext)}>
-          <Wand2 className="h-4 w-4" />
-          Paste Raw Text as Context
-        </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowImport(!showImport)}><Upload className="h-4 w-4" /> Populate from Card / JSON</Button>
+        <Button variant="outline" size="sm" onClick={() => setShowRawContext(!showRawContext)}><Wand2 className="h-4 w-4" /> Paste Raw Text as Context</Button>
       </div>
 
       {showImport && (
-        <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Paste a character card JSON and matching fields will be auto-mapped to this template's variables.
-          </p>
-          <Textarea
-            placeholder='Paste V2 JSON or character card data...'
-            value={importText}
-            onChange={(e) => setImportText(e.target.value)}
-            className="min-h-[100px] bg-secondary border-border font-mono text-sm"
-          />
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handlePopulateFromCard}>
-              <Upload className="h-4 w-4" />
-              Populate
-            </Button>
-            <Button variant="ghost" size="sm" onClick={() => { setShowImport(false); setImportText(""); }}>
-              Cancel
-            </Button>
-          </div>
+        <div className="space-y-3 rounded-lg border border-border bg-secondary/30 p-4">
+          <p className="text-sm text-muted-foreground">Paste character card JSON and matching fields will be mapped to author placeholders in this template.</p>
+          <Textarea placeholder="Paste character card JSON or character card data..." value={importText} onChange={(event) => setImportText(event.target.value)} className="min-h-[100px] border-border bg-secondary font-mono text-sm" />
+          <div className="flex gap-2"><Button size="sm" onClick={handlePopulateFromCard}><Upload className="h-4 w-4" /> Populate</Button><Button variant="ghost" size="sm" onClick={() => { setShowImport(false); setImportText(""); }}>Cancel</Button></div>
         </div>
       )}
 
       {showRawContext && (
-        <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Paste any raw text (character description, lore, story notes, etc.). This will be sent as additional context when generating variables — AI will extract and distribute relevant info into the right fields.
-          </p>
-          <Textarea
-            placeholder="Paste any text — character bios, world lore, story outlines, wiki entries, chat logs..."
-            value={rawContext}
-            onChange={(e) => setRawContext(e.target.value)}
-            className="min-h-[120px] bg-secondary border-border font-mono text-sm"
-          />
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => { setShowRawContext(false); setRawContext(""); }}>
-              Clear & Close
-            </Button>
-            {rawContext.trim() && (
-              <span className="text-xs text-muted-foreground self-center">
-                ✓ Context will be included in all AI generations
-              </span>
-            )}
-          </div>
+        <div className="space-y-3 rounded-lg border border-border bg-secondary/30 p-4">
+          <p className="text-sm text-muted-foreground">Paste raw text as additional context for AI generation. It is not included in copied output unless you add it to an author field.</p>
+          <Textarea placeholder="Paste character bios, world lore, story outlines, wiki entries, chat logs..." value={rawContext} onChange={(event) => setRawContext(event.target.value)} className="min-h-[120px] border-border bg-secondary font-mono text-sm" />
+          <div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => { setShowRawContext(false); setRawContext(""); }}>Clear & Close</Button>{rawContext.trim() && <span className="self-center text-xs text-muted-foreground">✓ Context will be included in AI generations</span>}</div>
         </div>
       )}
 
-      {/* Variables */}
       <div className="space-y-3">
-      <div className="flex items-center justify-between">
-          <h3 className="text-sm font-medium text-foreground">Variables</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium text-foreground">Author fields</h3>
           <div className="flex items-center gap-2">
-            {rawContext.trim() && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 border border-green-500/30 px-2 py-0.5 text-xs font-medium text-green-600">
-                <Check className="h-3 w-3" /> Context active
-              </span>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleGenerateAll}
-              disabled={generatingAll || generatingVar !== null || aiUnavailable}
-            >
-              {generatingAll ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Sparkles className="h-4 w-4" />
-              )}
+            {rawContext.trim() && <span className="inline-flex items-center gap-1 rounded-full border border-green-500/30 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600"><Check className="h-3 w-3" /> Context active</span>}
+            <Button variant="outline" size="sm" onClick={handleGenerateAll} disabled={generatingAll || generatingVar !== null || aiUnavailable}>
+              {generatingAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
               {generatingAll ? "Generating..." : "Generate All"}
             </Button>
           </div>
         </div>
-        {selectedTemplate.variables.map((v) => (
-          <div key={v.name}>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-muted-foreground">
-                {`{{${v.name}}}`} — {v.description}
+        {selectedTemplate.variables.length === 0 && <p className="rounded-lg border border-dashed border-border p-3 text-sm text-muted-foreground">This template has no author fields. Any verified runtime macros remain literal in the output.</p>}
+        {selectedTemplate.variables.map((variable) => (
+          <div key={variable.name}>
+            <div className="mb-1 flex items-center justify-between">
+              <label htmlFor={`template-variable-${variable.name}`} className="text-xs text-muted-foreground">
+                {variable.label} <code className="ml-1 rounded bg-secondary px-1 text-primary">{variable.token}</code> — {variable.description}
               </label>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => handleGenerateVariable(v.name)}
-                disabled={generatingVar === v.name || aiUnavailable}
-                className="h-6 px-2 text-xs text-muted-foreground hover:text-primary"
-              >
-                {generatingVar === v.name ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <Sparkles className="h-3 w-3" />
-                )}
-                {generatingVar === v.name ? "..." : "AI"}
+              <Button variant="ghost" size="sm" onClick={() => handleGenerateVariable(variable.name)} disabled={generatingVar === variable.name || aiUnavailable} className="h-6 px-2 text-xs text-muted-foreground hover:text-primary">
+                {generatingVar === variable.name ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                {generatingVar === variable.name ? "..." : "AI"}
               </Button>
             </div>
-            <Input
-              placeholder={v.placeholder}
-              value={variables[v.name] || ""}
-              onChange={(e) => setVariables((prev) => ({ ...prev, [v.name]: e.target.value }))}
-              className="bg-secondary border-border text-sm"
-            />
+            <Input id={`template-variable-${variable.name}`} placeholder={variable.placeholder || `Enter ${variable.label.toLowerCase()}`} value={variables[variable.name] || ""} onChange={(event) => setVariables((prev) => ({ ...prev, [variable.name]: event.target.value }))} className="border-border bg-secondary text-sm" />
           </div>
         ))}
       </div>
 
-      {/* Output */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-display font-semibold text-foreground">Generated Prompt</h3>
-          <Button variant="outline" size="sm" onClick={handleCopy}>
-            {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-            {copied ? "Copied" : "Copy"}
-          </Button>
+        <div className="mb-2 flex items-center justify-between">
+          <div><h3 className="font-display font-semibold text-foreground">Generated Prompt</h3>{hasUnresolvedPlaceholders && <p className="text-xs text-amber-300">Fill the fields without examples before copying.</p>}</div>
+          <Button variant="outline" size="sm" onClick={handleCopy} disabled={hasUnresolvedPlaceholders}>{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? "Copied" : "Copy filled output"}</Button>
         </div>
-        <pre className="rounded-lg border border-border bg-secondary/50 p-4 text-sm text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">
-          {getRenderedPrompt()}
-        </pre>
+        <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-secondary/50 p-4 font-mono text-sm text-muted-foreground">{getRenderedPrompt()}</pre>
       </div>
     </div>
   );
