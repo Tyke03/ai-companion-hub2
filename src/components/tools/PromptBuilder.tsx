@@ -213,7 +213,7 @@ export const PromptBuilder = () => {
 
       <div>
         <span id="prompt-template-label" className="mb-2 block text-sm font-medium text-foreground">Select Template</span>
-        <div className="flex flex-wrap gap-2">
+        <div role="group" aria-labelledby="prompt-template-label" className="flex flex-wrap gap-2">
           {allTemplates.map((template) => (
             <button
               key={template.id}
@@ -245,22 +245,22 @@ export const PromptBuilder = () => {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => setShowImport(!showImport)}><Upload className="h-4 w-4" /> Populate from Card / JSON</Button>
-        <Button variant="outline" size="sm" onClick={() => setShowRawContext(!showRawContext)}><Wand2 className="h-4 w-4" /> Paste Raw Text as Context</Button>
+        <Button variant="outline" size="sm" aria-expanded={showImport} aria-controls="prompt-import-panel" onClick={() => setShowImport(!showImport)}><Upload className="h-4 w-4" /> Populate from Card / JSON</Button>
+        <Button variant="outline" size="sm" aria-expanded={showRawContext} aria-controls="prompt-raw-context-panel" onClick={() => setShowRawContext(!showRawContext)}><Wand2 className="h-4 w-4" /> Paste Raw Text as Context</Button>
       </div>
 
       {showImport && (
-        <div className="space-y-3 rounded-lg border border-border bg-secondary/30 p-4">
+        <div id="prompt-import-panel" className="space-y-3 rounded-lg border border-border bg-secondary/30 p-4">
           <p className="text-sm text-muted-foreground">Paste character card JSON and matching fields will be mapped to author placeholders in this template.</p>
-          <Textarea placeholder="Paste character card JSON or character card data..." value={importText} onChange={(event) => setImportText(event.target.value)} className="min-h-[100px] border-border bg-secondary font-mono text-sm" />
+          <Textarea aria-label="Character card JSON to map" placeholder="Paste character card JSON or character card data..." value={importText} onChange={(event) => setImportText(event.target.value)} className="min-h-[100px] border-border bg-secondary font-mono text-sm" />
           <div className="flex gap-2"><Button size="sm" onClick={handlePopulateFromCard}><Upload className="h-4 w-4" /> Populate</Button><Button variant="ghost" size="sm" onClick={() => { setShowImport(false); setImportText(""); }}>Cancel</Button></div>
         </div>
       )}
 
       {showRawContext && (
-        <div className="space-y-3 rounded-lg border border-border bg-secondary/30 p-4">
+        <div id="prompt-raw-context-panel" className="space-y-3 rounded-lg border border-border bg-secondary/30 p-4">
           <p className="text-sm text-muted-foreground">Paste raw text as additional context for AI generation. It is not included in copied output unless you add it to an author field.</p>
-          <Textarea placeholder="Paste character bios, world lore, story outlines, wiki entries, chat logs..." value={rawContext} onChange={(event) => setRawContext(event.target.value)} className="min-h-[120px] border-border bg-secondary font-mono text-sm" />
+          <Textarea aria-label="Raw context text" id="prompt-raw-context" placeholder="Paste character bios, world lore, story outlines, wiki entries, chat logs..." value={rawContext} onChange={(event) => setRawContext(event.target.value)} className="min-h-[120px] border-border bg-secondary font-mono text-sm" />
           <div className="flex gap-2"><Button variant="ghost" size="sm" onClick={() => { setShowRawContext(false); setRawContext(""); }}>Clear & Close</Button>{rawContext.trim() && <span className="self-center text-xs text-muted-foreground">✓ Context will be included in AI generations</span>}</div>
         </div>
       )}
@@ -298,7 +298,7 @@ export const PromptBuilder = () => {
           <div><h3 className="font-display font-semibold text-foreground">Generated Prompt</h3>{hasUnresolvedPlaceholders && <p className="text-xs text-amber-300">Fill the fields without examples before copying.</p>}</div>
           <Button variant="outline" size="sm" onClick={handleCopy} disabled={hasUnresolvedPlaceholders}>{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? "Copied" : "Copy filled output"}</Button>
         </div>
-        <pre tabIndex={0} className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-secondary/50 p-4 font-mono text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{getRenderedPrompt()}</pre>
+        <pre tabIndex={0} aria-label="Generated prompt output" className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-secondary/50 p-4 font-mono text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{getRenderedPrompt()}</pre>
       </div>
     </div>
   );
