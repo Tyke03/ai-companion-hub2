@@ -28,6 +28,7 @@ import {
   type CardImportResult,
   type PreservedData,
 } from "@/lib/cardTypes";
+import { estimateCardTokens } from "@/lib/cardTokens";
 import { useAiBackendStatus } from "@/hooks/useAiBackend";
 import {
   AlertDialog,
@@ -269,9 +270,8 @@ export const CharacterCardBuilder = () => {
     setSpecVersion(result.format === "v3" ? "v3" : "v2");
   };
 
-  const permanentTokens = [card.name, card.description, card.personality, card.scenario].reduce((sum, value) => sum + Math.ceil(value.trim().split(/\s+/).filter(Boolean).length * 1.3), 0);
-  const variableTokens = [card.first_mes, card.mes_example].reduce((sum, value) => sum + Math.ceil(value.trim().split(/\s+/).filter(Boolean).length * 1.3), 0);
-  const totalTokens = permanentTokens + variableTokens;
+  /** Local approximate token estimate for the active card (pure, deterministic). */
+  const tokenEstimate = useMemo(() => estimateCardTokens(card, preserved), [card, preserved]);
   const renderGreeting = (): ReactNode => card.first_mes.split(/(\*[^*]+\*|"[^"]+")/g).filter(Boolean).map((part, index) => part.startsWith("*") && part.endsWith("*") ? <em key={index} className="text-muted-foreground">{part}</em> : part.startsWith('"') && part.endsWith('"') ? <strong key={index} className="text-foreground">{part}</strong> : <span key={index}>{part}</span>);
 
   const handleCopyJson = () => {
@@ -787,13 +787,63 @@ export const CharacterCardBuilder = () => {
         </Button>
       </div>
 
-      {/* Preview */}
-      {card.name && (
-        <div>
-          <div className="mb-2 flex items-center justify-between"><h3 className="font-display font-semibold text-foreground">Live preview</h3><div className="flex gap-2"><Button variant={previewMode === "json" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("json")}><FileJson className="h-4 w-4" /> JSON</Button><Button variant={previewMode === "chat" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("chat")}><Eye className="h-4 w-4" /> Chat bubble</Button></div></div>
-          {previewMode === "json" ? <><div className="mb-3 rounded-lg border border-border bg-secondary/30 p-3"><div className="mb-2 flex justify-between text-xs"><span>Permanent: {permanentTokens}</span><span>Variable: {variableTokens}</span><span>Total: {totalTokens}</span></div><div className="flex h-3 overflow-hidden rounded-full bg-secondary"><div className="bg-primary" style={{ width: `${Math.min(100, totalTokens ? permanentTokens / totalTokens * 100 : 0)}%` }} /><div className="bg-sky-500" style={{ width: `${Math.min(100, totalTokens ? variableTokens / totalTokens * 100 : 0)}%` }} /></div><p className={`mt-2 text-xs ${permanentTokens > 2048 ? "text-destructive" : "text-muted-foreground"}`}>{permanentTokens > 2048 ? "Warning: permanent definition exceeds 2,048 tokens." : `Recommended context buffer: approximately ${Math.max(0, 2048 - permanentTokens).toLocaleString()} tokens remaining.`}</p></div><pre tabIndex={0} className="rounded-lg border border-border bg-secondary/50 p-4 text-xs text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{JSON.stringify(currentExport.envelope, null, 2)}</pre></> : <div className="rounded-xl border border-border bg-card p-5"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">{card.name.slice(0, 1).toUpperCase()}</div><div><p className="font-semibold text-foreground">{card.name}</p><p className="text-xs text-muted-foreground">Opening scene</p></div></div><div className="max-w-2xl rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">{renderGreeting()}</div></div>}
+      {/* Approximate token estimate */}
+      <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-2">
+        <div className="flex items-baseline justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-foreground" id="card-token-estimate-label">Approx. tokens</p>
+            <p className="text-xs text-muted-foreground">Local estimate based on characters; actual token counts vary by model.</p>
+          </div>
+          <output aria-labelledby="card-token-estimate-label" className="text-xl font-semibold text-foreground tabular-nums">
+            {tokenEstimate.total.toLocaleString()}
+          </output>
         </div>
-      )}
+        <details className="text-xs text-muted-foreground">
+          <summary>What&apos;s included?</summary>
+          <p className="mt-2">Estimate = total relevant characters ÷ 4, rounded up. Only text that travels with the card is counted.</p>
+          {tokenEstimate.fields.length > 0 ? (
+            <ul className="mt-2 list-disc pl-4 space-y-1">
+              {tokenEstimate.fields.map((f) => (
+                <li key={f.key}>{f.label}: {f.chars.toLocaleString()} characters</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2">No populated text fields yet.</p>
+          )}
+          <p className="mt-2">Excluded: {tokenEstimate.excluded.join("; ")}.</p>
+          <p className="mt-2">Opaque data is not guessed at; this is not a tokenizer and not model-exact.</p>
+        </details>
+      </div>
+
+      {/* Preview */}
+      <div>
+        <div className="mb-2 flex items-center justify-between"><h3 className="font-display font-semibold text-foreground">Live preview</h3><div className="flex gap-2"><Button variant={previewMode === "json" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("json")}><FileJson className="h-4 w-4" /> JSON</Button><Button variant={previewMode === "chat" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("chat")}><Eye className="h-4 w-4" /> Chat bubble</Button></div></div>
+          {previewMode === "json" ? <pre tabIndex={0} aria-label="Exported card JSON preview" className="rounded-lg border border-border bg-secondary/50 p-4 text-xs text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{JSON.stringify(currentExport.envelope, null, 2)}</pre> : (
+            <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+              <div className="flex items-center gap-3">
+                {pngPreviewUrl ? (
+                  <img src={pngPreviewUrl} alt={card.name ? `${card.name} portrait preview` : "Character portrait preview"} className="h-10 w-10 rounded-full object-cover border border-border" />
+                ) : (
+                  <div aria-hidden="true" className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">{card.name ? card.name.slice(0, 1).toUpperCase() : "?"}</div>
+                )}
+                <div>
+                  <p className="font-semibold text-foreground">{card.name || "Character preview"}</p>
+                  <p className="text-xs text-muted-foreground">Opening scene{specVersion === "v3" ? " · V3 draft" : ""}</p>
+                </div>
+              </div>
+              {card.scenario.trim() && (
+                <p className="text-xs text-muted-foreground">Scenario: {card.scenario}</p>
+              )}
+              <div className="max-w-2xl rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                {card.first_mes.trim() ? renderGreeting() : <span className="text-muted-foreground">Add a first message to preview the opening chat bubble.</span>}
+              </div>
+              <div className="flex justify-end">
+                <div className="max-w-2xl rounded-2xl rounded-tr-sm bg-primary/10 p-4 text-sm leading-relaxed text-foreground">Hi — tell me about yourself.</div>
+              </div>
+              <p className="text-xs text-muted-foreground">Presentation-only preview: it does not generate dialogue, does not simulate platform behavior, and is not a guarantee of how another frontend will render the card.</p>
+            </div>
+          )}
+      </div>
     </div>
   );
 };

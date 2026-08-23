@@ -237,7 +237,48 @@ test.describe("V2 PNG export and re-import", () => {
   });
 });
 
-/* ── 7. Mobile viewport ── */
+/* ── 7. Token estimate and chat preview ── */
+
+test.describe("Token estimate and chat preview", () => {
+  test("shows the approximate-token label and explanation", async ({ page }) => {
+    await openCharacterBuilder(page);
+    await expect(page.getByText("Approx. tokens")).toBeVisible();
+    await expect(
+      page.getByText(/Local estimate based on characters/i),
+    ).toBeVisible();
+  });
+
+  test("editing description changes the visible estimate", async ({ page }) => {
+    await openCharacterBuilder(page);
+    const estimate = page.locator("output[aria-labelledby=\"card-token-estimate-label\"]");
+    const before = Number((await estimate.textContent()) || "0");
+    await page.getByPlaceholder(/mysterious sorceress/i).fill("x".repeat(400));
+    await expect(estimate).not.toHaveText(String(before));
+  });
+
+  test("chat preview updates character name and first-message content", async ({ page }) => {
+    await openCharacterBuilder(page);
+    await page.getByRole("button", { name: "Chat bubble" }).click();
+    await page.getByPlaceholder("Luna Starweaver").fill("QA Preview Card");
+    await page.getByPlaceholder(/Well, well/).fill("*waves* Hello from the preview.");
+    await expect(page.getByText("QA Preview Card").first()).toBeVisible();
+    const chatBubble = page.locator("div.whitespace-pre-wrap");
+    await expect(chatBubble.getByText("Hello from the preview.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Hi — tell me about yourself.")).toBeVisible();
+  });
+
+  test("empty card shows neutral preview without fabricated content", async ({ page }) => {
+    await openCharacterBuilder(page);
+    await page.getByRole("button", { name: "Chat bubble" }).click();
+    await expect(page.getByText("Character preview")).toBeVisible();
+    await expect(
+      page.getByText("Add a first message to preview the opening chat bubble."),
+    ).toBeVisible();
+    await expect(page.getByText("Unknown", { exact: true })).toHaveCount(0);
+  });
+});
+
+/* ── 8. Mobile viewport ── */
 
 test.describe("Mobile viewport", () => {
   test.use({ viewport: { width: 375, height: 812 } });
@@ -254,6 +295,11 @@ test.describe("Mobile viewport", () => {
     await page.getByRole("button", { name: "Import", exact: true }).click();
 
     await expect(page.getByText(/character.book.*preserved/i)).toBeVisible();
+
+    // Token summary and chat preview remain readable with no horizontal overflow
+    await expect(page.getByText("Approx. tokens")).toBeVisible();
+    await page.getByRole("button", { name: "Chat bubble" }).click();
+    await expect(page.getByText("Hi — tell me about yourself.")).toBeVisible();
 
     // Check no element overflows horizontally
     const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
