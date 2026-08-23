@@ -212,14 +212,15 @@ export const PromptBuilder = () => {
       )}
 
       <div>
-        <label className="mb-2 block text-sm font-medium text-foreground">Select Template</label>
+        <span id="prompt-template-label" className="mb-2 block text-sm font-medium text-foreground">Select Template</span>
         <div className="flex flex-wrap gap-2">
           {allTemplates.map((template) => (
             <button
               key={template.id}
               type="button"
               onClick={() => handleSelectTemplate(template)}
-              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${selectedTemplate.id === template.id ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}
+              aria-pressed={selectedTemplate.id === template.id}
+              className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${selectedTemplate.id === template.id ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-foreground"}`}
             >
               {template.name}{template.userCreated ? " · Local" : ""}
             </button>
@@ -297,7 +298,7 @@ export const PromptBuilder = () => {
           <div><h3 className="font-display font-semibold text-foreground">Generated Prompt</h3>{hasUnresolvedPlaceholders && <p className="text-xs text-amber-300">Fill the fields without examples before copying.</p>}</div>
           <Button variant="outline" size="sm" onClick={handleCopy} disabled={hasUnresolvedPlaceholders}>{copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}{copied ? "Copied" : "Copy filled output"}</Button>
         </div>
-        <pre className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-secondary/50 p-4 font-mono text-sm text-muted-foreground">{getRenderedPrompt()}</pre>
+        <pre tabIndex={0} className="max-h-[400px] overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-secondary/50 p-4 font-mono text-sm text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{getRenderedPrompt()}</pre>
       </div>
     </div>
   );

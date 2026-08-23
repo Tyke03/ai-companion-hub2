@@ -68,7 +68,7 @@ test.describe("Invalid and unrecognized text import", () => {
     const ta = page.getByPlaceholder("Paste character data here...");
     await ta.fill('{"foo":"bar"}');
     await page.getByRole("button", { name: "Import", exact: true }).click();
-    await expect(page.getByText("Not a recognized card").first()).toBeVisible();
+    await expect(page.getByText("Not a recognizable character card").first()).toBeVisible();
     await expect(page.getByPlaceholder("Luna Starweaver")).toHaveValue("");
   });
 
@@ -76,7 +76,7 @@ test.describe("Invalid and unrecognized text import", () => {
     const ta = page.getByPlaceholder("Paste character data here...");
     await ta.fill('{"name":"only a name"}');
     await page.getByRole("button", { name: "Import", exact: true }).click();
-    await expect(page.getByText("Not a recognized card").first()).toBeVisible();
+    await expect(page.getByText("Not a recognizable character card").first()).toBeVisible();
     await expect(page.getByPlaceholder("Luna Starweaver")).toHaveValue("");
   });
 
@@ -84,7 +84,7 @@ test.describe("Invalid and unrecognized text import", () => {
     const ta = page.getByPlaceholder("Paste character data here...");
     await ta.fill('["array"]');
     await page.getByRole("button", { name: "Import", exact: true }).click();
-    await expect(page.getByText("Not a recognized card").first()).toBeVisible();
+    await expect(page.getByText("Not a recognizable character card").first()).toBeVisible();
     await expect(page.getByPlaceholder("Luna Starweaver")).toHaveValue("");
   });
 });

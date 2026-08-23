@@ -168,9 +168,9 @@ export const DocConsolidator = () => {
 
       <div className="space-y-4">
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">Service Name</label>
+          <label htmlFor="doc-service-name" className="text-sm font-medium text-foreground mb-1 block">Service Name</label>
           <Select value={serviceName} onValueChange={(v) => { setServiceName(v); if (v !== "custom") setCustomName(""); }}>
-            <SelectTrigger className="bg-secondary border-border">
+            <SelectTrigger id="doc-service-name" className="bg-secondary border-border">
               <SelectValue placeholder="Select a platform..." />
             </SelectTrigger>
             <SelectContent>
@@ -184,6 +184,8 @@ export const DocConsolidator = () => {
           </Select>
           {serviceName === "custom" && (
             <Input
+              id="doc-custom-service-name"
+              aria-label="Custom service name"
               placeholder="Enter service name..."
               className="mt-2 bg-secondary border-border"
               value={customName}
@@ -194,13 +196,14 @@ export const DocConsolidator = () => {
 
         {/* URL fetch */}
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label htmlFor="doc-url" className="text-sm font-medium text-foreground mb-1 block">
             Fetch Documentation from URL
           </label>
           <div className="flex gap-2">
             <div className="relative flex-1">
               <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                id="doc-url"
                 placeholder="https://docs.example.com/setup-guide"
                 value={docUrl}
                 onChange={(e) => setDocUrl(e.target.value)}
@@ -219,10 +222,11 @@ export const DocConsolidator = () => {
         </div>
 
         <div>
-          <label className="text-sm font-medium text-foreground mb-1 block">
+          <label htmlFor="doc-input" className="text-sm font-medium text-foreground mb-1 block">
             Paste Documentation
           </label>
           <Textarea
+            id="doc-input"
             placeholder="Paste documentation text, setup guides, wiki content, README files, etc... (or use the URL fetch above)"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}

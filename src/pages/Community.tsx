@@ -140,7 +140,7 @@ const Community = () => {
         <section className="rounded-xl border border-border bg-card p-6">
           <h2 className="font-display text-xl font-semibold text-foreground mb-2">Community Card Showcase</h2>
           <p className="text-sm text-muted-foreground mb-4">A read-only preview of cards shared to the public gallery. Publishing cards from the Card Builder isn't enabled yet, so this list is usually empty.</p>
-          <div className="flex flex-wrap gap-2 mb-4"><div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={galleryQuery} onChange={(event) => setGalleryQuery(event.target.value)} placeholder="Search cards or tags" className="pl-9 bg-secondary" /></div>{(["all", "SFW", "NSFW"] as const).map((rating) => <button key={rating} onClick={() => setGalleryRating(rating)} className={`rounded-md border px-3 py-2 text-xs ${galleryRating === rating ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>{rating === "all" ? "All ratings" : rating}</button>)}</div>
+          <div className="flex flex-wrap gap-2 mb-4"><div className="relative flex-1 min-w-[220px]"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input value={galleryQuery} onChange={(event) => setGalleryQuery(event.target.value)} placeholder="Search cards or tags" className="pl-9 bg-secondary" /></div>{(["all", "SFW", "NSFW"] as const).map((rating) => <button key={rating} type="button" aria-pressed={galleryRating === rating} onClick={() => setGalleryRating(rating)} className={`rounded-md border px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${galleryRating === rating ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>{rating === "all" ? "All ratings" : rating}</button>)}</div>
           {galleryStatus === "loading" && <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Loading shared cards…</p>}
           {galleryStatus === "unconfigured" && <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Community publishing isn't configured yet, so the gallery is read-only and empty. Check back later.</p>}
           {galleryStatus === "error" && <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">Couldn't load shared cards right now. Please try again later.</p>}
@@ -158,8 +158,9 @@ const Community = () => {
           <div className="space-y-4 max-w-2xl">
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">Platform name *</label>
+                <label htmlFor="submission-platform-name" className="text-sm font-medium text-foreground mb-1 block">Platform name *</label>
                 <Input
+                  id="submission-platform-name"
                   placeholder="Example AI"
                   value={subName}
                   onChange={(e) => setSubName(e.target.value)}
@@ -167,8 +168,9 @@ const Community = () => {
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-foreground mb-1 block">URL *</label>
+                <label htmlFor="submission-platform-url" className="text-sm font-medium text-foreground mb-1 block">URL *</label>
                 <Input
+                  id="submission-platform-url"
                   placeholder="https://example.ai"
                   value={subUrl}
                   onChange={(e) => setSubUrl(e.target.value)}
@@ -177,9 +179,9 @@ const Community = () => {
               </div>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">Best-fit category</label>
+              <label htmlFor="submission-category" className="text-sm font-medium text-foreground mb-1 block">Best-fit category</label>
               <Select value={subCategory} onValueChange={setSubCategory}>
-                <SelectTrigger className="bg-secondary border-border">
+                <SelectTrigger id="submission-category" className="bg-secondary border-border">
                   <SelectValue placeholder="Select a category..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -193,8 +195,9 @@ const Community = () => {
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium text-foreground mb-1 block">Notes (model, pricing, why it belongs)</label>
+              <label htmlFor="submission-notes" className="text-sm font-medium text-foreground mb-1 block">Notes (model, pricing, why it belongs)</label>
               <Textarea
+                id="submission-notes"
                 placeholder="What model does it run? Is there an API? What makes it worth listing?"
                 value={subNotes}
                 onChange={(e) => setSubNotes(e.target.value)}
