@@ -31,3 +31,8 @@ dist-ssr
 # Supabase CLI temp artifacts
 supabase/.temp/
 .vercel
+
+# Playwright E2E artifacts
+/test-results/
+/playwright-report/
+/playwright/.cache/
