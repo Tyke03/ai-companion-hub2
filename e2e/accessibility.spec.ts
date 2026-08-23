@@ -83,3 +83,101 @@ test.describe("Character Builder keyboard and focus", () => {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });
+
+const toolHeading: Record<string, RegExp> = {
+  "Prompt Builder": /Prompt Builder/,
+  "Lorebook Builder": /Lorebook \/ World Info Builder/,
+  "Persona Builder": /User Persona Builder/,
+  "Doc Consolidator": /Documentation Consolidator/,
+  "API Tester": /API Key & Model Access Tester/,
+};
+
+// Prompt Builder and Doc Consolidator are tabs inside /tools; the other three are standalone routes.
+const toolRoute: Record<string, string | null> = {
+  "Prompt Builder": null,
+  "Doc Consolidator": null,
+  "Lorebook Builder": "/tools/lorebook-builder",
+  "Persona Builder": "/tools/persona-builder",
+  "API Tester": "/tools/api-tester",
+};
+
+async function openTool(page, name: string, heading: RegExp) {
+  await bypassAgeGate(page);
+  const route = toolRoute[name];
+  if (route) {
+    await page.goto(route);
+  } else {
+    await page.goto("/tools");
+    await page.getByRole("tab", { name: new RegExp(name) }).click();
+  }
+  await expect(page.getByRole("heading", { name: heading })).toBeVisible();
+}
+
+test.describe("local tool automated accessibility scans", () => {
+  for (const [name, heading] of Object.entries(toolHeading)) {
+    test(`has no axe violations on ${name}`, async ({ page }) => {
+      await openTool(page, name, heading);
+      const results = await new AxeBuilder({ page })
+        .include("#root")
+        .analyze();
+      expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
+    });
+  }
+
+  test("has no horizontal overflow on any of the five tools at mobile", async ({ page }) => {
+    await bypassAgeGate(page);
+    await page.goto("/tools");
+    for (const name of Object.keys(toolHeading)) {
+      await openTool(page, name, toolHeading[name]);
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        `${name} overflows horizontally`,
+      ).toBe(true);
+    }
+  });
+});
+
+test.describe("local tool keyboard and focus", () => {
+  test("Prompt Builder: template selection and author fields are keyboard reachable", async ({ page }) => {
+    await openTool(page, "Prompt Builder", toolHeading["Prompt Builder"]);
+    await expect(page.locator("button[aria-pressed]").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: /Copy filled output/ })).toBeVisible();
+  });
+
+  test("Prompt Builder: generated output preview is keyboard reachable and openable", async ({ page }) => {
+    await openTool(page, "Prompt Builder", toolHeading["Prompt Builder"]);
+    await page.getByRole("button", { name: /Populate from Card \/ JSON/ }).click();
+    await expect(page.getByRole("textbox", { name: "Character card JSON to map" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Populate", exact: true })).toBeVisible();
+  });
+
+  test("Lorebook Builder: reachable search, entry fields, and labelled inputs", async ({ page }) => {
+    await openTool(page, "Lorebook Builder", toolHeading["Lorebook Builder"]);
+    await expect(page.getByRole("textbox", { name: "Search lorebook entries" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Keys / Trigger Words" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Content / Body" })).toBeVisible();
+  });
+
+  test("Persona Builder: all fields have associated labels and format toggles exist", async ({ page }) => {
+    await openTool(page, "Persona Builder", toolHeading["Persona Builder"]);
+    await expect(page.getByRole("textbox", { name: "Persona Name" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Physical Description" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "SillyTavern Persona JSON" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.getByRole("button", { name: "W++" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("Doc Consolidator: labelled service, URL, input, and key-reachable result preview", async ({ page }) => {
+    await openTool(page, "Doc Consolidator", toolHeading["Doc Consolidator"]);
+    await expect(page.getByRole("textbox", { name: "Paste Documentation" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /Fetch Documentation from URL/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Consolidate Documentation" })).toBeVisible();
+  });
+
+  test("API Tester: labelled fields and no-key disabled state is exposed", async ({ page }) => {
+    await openTool(page, "API Tester", toolHeading["API Tester"]);
+    await expect(page.getByRole("textbox", { name: "Base endpoint" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /API key/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Test one-turn ping/ })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Fetch available models/ })).toBeEnabled();
+  });
+});
