@@ -284,7 +284,7 @@ const Index = () => {
             ))}
           </div>
         )}
-        <p className="mt-8 text-xs text-muted-foreground/70">
+        <p className="mt-8 text-xs text-muted-foreground">
           Content levels (1–5) are based on platform claims and community reports, not first-party
           audits — policies change, so always verify before relying on them. Each card shows a
           last-verified date.

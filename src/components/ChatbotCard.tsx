@@ -57,9 +57,9 @@ export const ChatbotCard = ({
   return (
     <div className="card-glow group flex flex-col rounded-xl border border-border bg-card p-5">
       <div className="mb-3 flex items-start justify-between gap-2">
-        <h3 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+        <h2 className="font-display text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
           {bot.name}
-        </h3>
+        </h2>
         <div className="flex items-center gap-1.5 shrink-0">
           <button onClick={toggleFavorite} title={favorite ? "Remove bookmark" : "Bookmark platform"} aria-label={favorite ? `Remove ${bot.name} bookmark` : `Bookmark ${bot.name}`} className={`flex h-7 w-7 items-center justify-center rounded-md border ${favorite ? "border-primary bg-primary/15 text-primary" : "border-border bg-secondary text-muted-foreground hover:text-primary"}`}><Star className={`h-3.5 w-3.5 ${favorite ? "fill-current" : ""}`} /></button>
           {onCompareToggle && (
@@ -152,32 +152,32 @@ export const ChatbotCard = ({
       <div className="mb-3 space-y-1.5 rounded-lg border border-border bg-secondary/40 p-3 text-xs">
         {bot.model && (
           <div className="flex gap-2">
-            <span className="w-20 shrink-0 text-muted-foreground/70">Model</span>
+            <span className="w-20 shrink-0 text-muted-foreground">Model</span>
             <span className="text-foreground/90">{bot.model}</span>
           </div>
         )}
         {bot.contextWindow && (
           <div className="flex gap-2">
-            <span className="w-20 shrink-0 text-muted-foreground/70">Context</span>
+            <span className="w-20 shrink-0 text-muted-foreground">Context</span>
             <span className="text-foreground/90">{bot.contextWindow}</span>
           </div>
         )}
         {bot.pricing && (
           <div className="flex gap-2">
-            <span className="w-20 shrink-0 text-muted-foreground/70">Pricing</span>
+            <span className="w-20 shrink-0 text-muted-foreground">Pricing</span>
             <span className="text-foreground/90">{bot.pricing}</span>
           </div>
         )}
         {bot.memory && (
           <div className="flex gap-2">
-            <span className="w-20 shrink-0 text-muted-foreground/70">Memory</span>
+            <span className="w-20 shrink-0 text-muted-foreground">Memory</span>
             <span className="text-foreground/90">{bot.memory}</span>
           </div>
         )}
         {bot.knownIssues && (
           <div className="flex gap-2">
-            <span className="w-20 shrink-0 text-muted-foreground/70">Known issues</span>
-            <span className="text-destructive/90">{bot.knownIssues}</span>
+            <span className="w-20 shrink-0 text-muted-foreground">Known issues</span>
+            <span className="text-destructive">{bot.knownIssues}</span>
           </div>
         )}
       </div>

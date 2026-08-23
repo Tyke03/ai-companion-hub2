@@ -40,6 +40,14 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 const errMsg = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
@@ -91,12 +99,13 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
 };
 
 function ListEditor({
-  items, onChange, placeholder, addLabel,
+  items, onChange, placeholder, addLabel, fieldLabel,
 }: {
   items: string[];
   onChange: (items: string[]) => void;
   placeholder: string;
   addLabel: string;
+  fieldLabel: string;
 }) {
   const update = (i: number, value: string) => {
     const next = [...items];
@@ -117,6 +126,7 @@ function ListEditor({
             placeholder={placeholder}
             value={item}
             onChange={(e) => update(i, e.target.value)}
+            aria-label={`${fieldLabel} ${i + 1}`}
             className="min-h-[64px] flex-1 bg-secondary border-border text-sm"
           />
           <Button
@@ -170,6 +180,7 @@ export const CharacterCardBuilder = () => {
   const [generatingAll, setGeneratingAll] = useState(false);
   const [importText, setImportText] = useState("");
   const [showImport, setShowImport] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
   const [pngFile, setPngFile] = useState<File | null>(null);
   const pngInputRef = useRef<HTMLInputElement>(null);
   const fileImportRef = useRef<HTMLInputElement>(null);
@@ -414,7 +425,7 @@ export const CharacterCardBuilder = () => {
 
   const handleImport = () => {
     if (!importText.trim()) {
-      toast({ title: "Empty", description: "Paste character data to import.", variant: "destructive" });
+      setImportError("Paste V1, V2, or V3-draft Character Card JSON before importing.");
       return;
     }
 
@@ -423,26 +434,19 @@ export const CharacterCardBuilder = () => {
     try {
       parsedJson = JSON.parse(importText);
     } catch {
-      toast({
-        title: "Not valid JSON",
-        description: "This is not a recognized Character Card JSON file. Use V1, V2, or V3-draft card JSON.",
-        variant: "destructive",
-      });
+      setImportError("Not valid JSON. Use V1, V2, or V3-draft Character Card JSON.");
       return;
     }
 
     if (typeof parsedJson !== "object" || parsedJson === null) {
-      toast({
-        title: "Not a card",
-        description: "This is not a recognized Character Card JSON file. Use V1, V2, or V3-draft card JSON.",
-        variant: "destructive",
-      });
+      setImportError("Not a recognized Character Card. Use V1, V2, or V3-draft Character Card JSON.");
       return;
     }
 
     try {
       const result = importCard(parsedJson);
       applyImport(result);
+      setImportError(null);
       toast({
         title: "Imported",
         description: result.format === "v1"
@@ -454,19 +458,7 @@ export const CharacterCardBuilder = () => {
       setShowImport(false);
       setImportText("");
     } catch (err) {
-      if (err instanceof CardImportError) {
-        toast({
-          title: "Not a recognized card",
-          description: err.message,
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Import error",
-          description: errMsg(err) || "Failed to import character card.",
-          variant: "destructive",
-        });
-      }
+      setImportError(err instanceof CardImportError ? err.message : errMsg(err) || "Failed to import character card.");
     }
   };
 
@@ -535,9 +527,14 @@ export const CharacterCardBuilder = () => {
       {/* Spec version toggle */}
       <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary/30 px-4 py-3">
         <span className={`text-sm font-medium ${specVersion === "v2" ? "text-foreground" : "text-muted-foreground"}`}>V2</span>
-        <Switch checked={specVersion === "v3"} onCheckedChange={(checked) => setSpecVersion(checked ? "v3" : "v2")} />
+        <Switch
+          checked={specVersion === "v3"}
+          onCheckedChange={(checked) => setSpecVersion(checked ? "v3" : "v2")}
+          aria-label="Use V3 draft format"
+          aria-describedby="character-card-version-help"
+        />
         <span className={`text-sm font-medium ${specVersion === "v3" ? "text-foreground" : "text-muted-foreground"}`}>V3 (draft)</span>
-        <span className="text-xs text-muted-foreground ml-2">
+        <span id="character-card-version-help" className="text-xs text-muted-foreground ml-2">
           {specVersion === "v3"
             ? "chara_card_v3 (draft spec) — includes nickname, source, assets, multilingual notes. May not be fully supported by all frontends."
             : "chara_card_v2 — stable, widely supported"}
@@ -546,7 +543,7 @@ export const CharacterCardBuilder = () => {
 
       {/* Imported format badge + preservation / export notices */}
       {(importedFormat || allNotices.length > 0) && (
-        <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3 space-y-1.5">
+        <div className="rounded-lg border border-border bg-secondary/30 px-4 py-3 space-y-1.5" role="status" aria-live="polite">
           {importedFormat && (
             <p className="text-sm font-medium text-foreground">
               {importedFormat === "v1" && "Imported as V1 — this card will export as V2 (upgraded)."}
@@ -565,12 +562,35 @@ export const CharacterCardBuilder = () => {
 
       {/* Top action bar */}
       <div className="flex flex-wrap gap-3">
-        <Button variant="outline" onClick={() => setShowImport(!showImport)}>
-          <Upload className="h-4 w-4" /> Import (Text)
-        </Button>
+        <Dialog open={showImport} onOpenChange={(open) => { setShowImport(open); if (!open) { setImportText(""); setImportError(null); } }}>
+          <DialogTrigger asChild>
+            <Button variant="outline">
+              <Upload className="h-4 w-4" /> Import (Text)
+            </Button>
+          </DialogTrigger>
+          <DialogContent aria-describedby="character-import-description">
+            <DialogTitle>Import Character Card JSON</DialogTitle>
+            <DialogDescription id="character-import-description">
+              Paste V1, V2, or V3-draft JSON. Unrecognized formats are rejected locally.
+            </DialogDescription>
+            {importError && (
+              <div role="alert" aria-live="assertive" className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">
+                {importError}
+              </div>
+            )}
+            <Textarea id="character-import-text" aria-label="Character Card JSON" placeholder="Paste character data here..." value={importText} onChange={(e) => { setImportText(e.target.value); if (importError) setImportError(null); }} className="min-h-[150px] bg-secondary border-border font-mono text-sm" />
+            <DialogFooter>
+              <Button onClick={handleImport}>
+                <Upload className="h-4 w-4" /> Import
+              </Button>
+              <Button variant="ghost" onClick={() => { setShowImport(false); setImportText(""); setImportError(null); }}>Cancel</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
         <div>
-          <input ref={fileImportRef} type="file" accept=".json,.png,.txt,.yaml,.yml" className="hidden" onChange={handleFileImport} />
-          <Button variant="outline" onClick={() => fileImportRef.current?.click()}>
+          <input ref={fileImportRef} id="character-card-file" type="file" accept=".json,.png,.txt,.yaml,.yml" className="sr-only" aria-label="Character Card file" aria-describedby="character-card-file-help" onChange={handleFileImport} />
+          <p id="character-card-file-help" className="sr-only">Accepts JSON, PNG, TXT, YAML, or YML files. JSON files are limited to 5 megabytes and PNG files to 25 megabytes.</p>
+          <Button variant="outline" onClick={() => fileImportRef.current?.click()} aria-describedby="character-card-file-help">
             <Upload className="h-4 w-4" /> Import (File/PNG)
           </Button>
         </div>
@@ -599,29 +619,12 @@ export const CharacterCardBuilder = () => {
 
       {showGenerationSettings && <div className="rounded-lg border border-primary/20 bg-primary/5 p-4"><div className="flex items-center gap-2"><Settings2 className="h-4 w-4 text-primary" /><p className="text-sm font-medium text-foreground">AI generation settings</p></div><div className="mt-3 flex flex-wrap gap-2"><button onClick={() => setGenerationMode("default")} className={`rounded-md border px-3 py-1.5 text-xs ${generationMode === "default" ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>Default Free API</button><button onClick={() => setGenerationMode("byok")} className={`rounded-md border px-3 py-1.5 text-xs ${generationMode === "byok" ? "border-primary bg-primary/10 text-primary" : "border-border bg-secondary text-muted-foreground"}`}>Custom OpenRouter / BYOK</button></div><p className="mt-2 text-xs text-muted-foreground">Privacy: the default mode uses the configured app backend. BYOK mode is a setting placeholder until a custom key is entered; keys should remain in memory and never be logged.</p></div>}
 
-      {/* Import panel */}
-      {showImport && (
-        <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Paste character data in <strong>V1, V2, or V3-draft JSON</strong>. Unrecognized formats are rejected with a local error.
-          </p>
-          <Textarea placeholder="Paste character data here..." value={importText} onChange={(e) => setImportText(e.target.value)} className="min-h-[150px] bg-secondary border-border font-mono text-sm" />
-          <div className="flex gap-2">
-            <Button onClick={handleImport}>
-              <Upload className="h-4 w-4" />
-              Import
-            </Button>
-            <Button variant="ghost" onClick={() => { setShowImport(false); setImportText(""); }}>Cancel</Button>
-          </div>
-        </div>
-      )}
-
       {/* Fields */}
       <div className="space-y-4">
         {fields.map((field) => (
           <div key={field.key}>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-foreground">{field.label}</label>
+              <label htmlFor={`card-field-${field.key}`} className="text-sm font-medium text-foreground">{field.label}</label>
               <div className="flex items-center gap-2">
                 {recommendedMax[field.key] && (
                   <CharCountIndicator current={String(card[field.key]).length} max={recommendedMax[field.key]} />
@@ -635,9 +638,9 @@ export const CharacterCardBuilder = () => {
               </div>
             </div>
             {field.multiline ? (
-              <Textarea placeholder={field.placeholder} value={String(card[field.key])} onChange={(e) => updateField(field.key, e.target.value)} className="min-h-[100px] bg-secondary border-border text-sm" />
+              <Textarea id={`card-field-${field.key}`} placeholder={field.placeholder} value={String(card[field.key])} onChange={(e) => updateField(field.key, e.target.value)} className="min-h-[100px] bg-secondary border-border text-sm" />
             ) : (
-              <Input placeholder={field.placeholder} value={String(card[field.key])} onChange={(e) => updateField(field.key, e.target.value)} className="bg-secondary border-border" />
+              <Input id={`card-field-${field.key}`} placeholder={field.placeholder} value={String(card[field.key])} onChange={(e) => updateField(field.key, e.target.value)} className="bg-secondary border-border" />
             )}
           </div>
         ))}
@@ -645,7 +648,7 @@ export const CharacterCardBuilder = () => {
         {/* Alternate greetings list editor */}
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="text-sm font-medium text-foreground">Alternate Greetings</label>
+            <span className="text-sm font-medium text-foreground">Alternate Greetings</span>
             <span className="text-xs text-muted-foreground">Multiple opening scenarios for the same character</span>
           </div>
           <ListEditor
@@ -653,6 +656,7 @@ export const CharacterCardBuilder = () => {
             onChange={(items) => updateList("alternate_greetings", items)}
             placeholder={'*A different opening message* "An alternate way to start..."'}
             addLabel="Add alternate greeting"
+            fieldLabel="Alternate greeting"
           />
         </div>
 
@@ -661,7 +665,7 @@ export const CharacterCardBuilder = () => {
           <>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium text-foreground">Source</label>
+                <span className="text-sm font-medium text-foreground">Source</span>
                 <span className="text-xs text-muted-foreground">URLs or IDs where this card originated</span>
               </div>
               <ListEditor
@@ -669,11 +673,12 @@ export const CharacterCardBuilder = () => {
                 onChange={(items) => updateList("source", items)}
                 placeholder="https://chub.ai/characters/..."
                 addLabel="Add source"
+                fieldLabel="Source URL"
               />
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-sm font-medium text-foreground">Group-Only Greetings</label>
+                <span className="text-sm font-medium text-foreground">Group-Only Greetings</span>
                 <span className="text-xs text-muted-foreground">Greetings used only in group chats</span>
               </div>
               <ListEditor
@@ -681,6 +686,7 @@ export const CharacterCardBuilder = () => {
                 onChange={(items) => updateList("group_only_greetings", items)}
                 placeholder="*A greeting that acknowledges the other characters in the room*"
                 addLabel="Add group greeting"
+                fieldLabel="Group-only greeting"
               />
             </div>
             <div className="rounded-lg border border-border bg-secondary/30 p-4 space-y-3">
@@ -712,7 +718,7 @@ export const CharacterCardBuilder = () => {
         {specVersion === "v3" && (
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-sm font-medium text-foreground">Creator Notes (Multilingual JSON)</label>
+              <label htmlFor="card-field-creator-notes-multilingual" className="text-sm font-medium text-foreground">Creator Notes (Multilingual JSON)</label>
               {card.creator_notes_multilingual.trim() && (
                 <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${
                   multilingual.valid
@@ -725,6 +731,7 @@ export const CharacterCardBuilder = () => {
               )}
             </div>
             <Textarea
+              id="card-field-creator-notes-multilingual"
               placeholder='{"es": "Notas en español", "ja": "日本語のノート"}'
               value={card.creator_notes_multilingual}
               onChange={(e) => updateField("creator_notes_multilingual", e.target.value)}
@@ -750,9 +757,10 @@ export const CharacterCardBuilder = () => {
         <p className="text-xs text-muted-foreground">
           Upload a character portrait PNG (max {MAX_PNG_LABEL}) to export as an embedded card (used by SillyTavern, RisuAI, etc.)
         </p>
-        <input ref={pngInputRef} type="file" accept="image/png" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setPngFile(f); }} />
+        <input ref={pngInputRef} id="character-card-png" type="file" accept="image/png" className="sr-only" aria-label="Character portrait PNG" aria-describedby="character-card-png-help" onChange={(e) => { const f = e.target.files?.[0]; if (f) setPngFile(f); }} />
+        <p id="character-card-png-help" className="sr-only">PNG images only, maximum size {MAX_PNG_LABEL}. The image stays in your browser and is used for local card embedding.</p>
         <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => pngInputRef.current?.click()}>
+          <Button variant="outline" size="sm" onClick={() => pngInputRef.current?.click()} aria-describedby="character-card-png-help">
             <Image className="h-4 w-4" />
             {pngFile ? pngFile.name : "Choose PNG"}
           </Button>
@@ -783,7 +791,7 @@ export const CharacterCardBuilder = () => {
       {card.name && (
         <div>
           <div className="mb-2 flex items-center justify-between"><h3 className="font-display font-semibold text-foreground">Live preview</h3><div className="flex gap-2"><Button variant={previewMode === "json" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("json")}><FileJson className="h-4 w-4" /> JSON</Button><Button variant={previewMode === "chat" ? "default" : "outline"} size="sm" onClick={() => setPreviewMode("chat")}><Eye className="h-4 w-4" /> Chat bubble</Button></div></div>
-          {previewMode === "json" ? <><div className="mb-3 rounded-lg border border-border bg-secondary/30 p-3"><div className="mb-2 flex justify-between text-xs"><span>Permanent: {permanentTokens}</span><span>Variable: {variableTokens}</span><span>Total: {totalTokens}</span></div><div className="flex h-3 overflow-hidden rounded-full bg-secondary"><div className="bg-primary" style={{ width: `${Math.min(100, totalTokens ? permanentTokens / totalTokens * 100 : 0)}%` }} /><div className="bg-sky-500" style={{ width: `${Math.min(100, totalTokens ? variableTokens / totalTokens * 100 : 0)}%` }} /></div><p className={`mt-2 text-xs ${permanentTokens > 2048 ? "text-destructive" : "text-muted-foreground"}`}>{permanentTokens > 2048 ? "Warning: permanent definition exceeds 2,048 tokens." : `Recommended context buffer: approximately ${Math.max(0, 2048 - permanentTokens).toLocaleString()} tokens remaining.`}</p></div><pre className="rounded-lg border border-border bg-secondary/50 p-4 text-xs text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono">{JSON.stringify(currentExport.envelope, null, 2)}</pre></> : <div className="rounded-xl border border-border bg-card p-5"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">{card.name.slice(0, 1).toUpperCase()}</div><div><p className="font-semibold text-foreground">{card.name}</p><p className="text-xs text-muted-foreground">Opening scene</p></div></div><div className="max-w-2xl rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">{renderGreeting()}</div></div>}
+          {previewMode === "json" ? <><div className="mb-3 rounded-lg border border-border bg-secondary/30 p-3"><div className="mb-2 flex justify-between text-xs"><span>Permanent: {permanentTokens}</span><span>Variable: {variableTokens}</span><span>Total: {totalTokens}</span></div><div className="flex h-3 overflow-hidden rounded-full bg-secondary"><div className="bg-primary" style={{ width: `${Math.min(100, totalTokens ? permanentTokens / totalTokens * 100 : 0)}%` }} /><div className="bg-sky-500" style={{ width: `${Math.min(100, totalTokens ? variableTokens / totalTokens * 100 : 0)}%` }} /></div><p className={`mt-2 text-xs ${permanentTokens > 2048 ? "text-destructive" : "text-muted-foreground"}`}>{permanentTokens > 2048 ? "Warning: permanent definition exceeds 2,048 tokens." : `Recommended context buffer: approximately ${Math.max(0, 2048 - permanentTokens).toLocaleString()} tokens remaining.`}</p></div><pre tabIndex={0} className="rounded-lg border border-border bg-secondary/50 p-4 text-xs text-muted-foreground overflow-auto max-h-[400px] whitespace-pre-wrap font-mono focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{JSON.stringify(currentExport.envelope, null, 2)}</pre></> : <div className="rounded-xl border border-border bg-card p-5"><div className="mb-4 flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">{card.name.slice(0, 1).toUpperCase()}</div><div><p className="font-semibold text-foreground">{card.name}</p><p className="text-xs text-muted-foreground">Opening scene</p></div></div><div className="max-w-2xl rounded-2xl rounded-tl-sm bg-secondary p-4 text-sm leading-relaxed text-foreground whitespace-pre-wrap">{renderGreeting()}</div></div>}
         </div>
       )}
     </div>

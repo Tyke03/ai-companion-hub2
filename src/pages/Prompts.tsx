@@ -126,7 +126,7 @@ const Prompts = () => {
                 </dl>
                 <p className="mt-3 text-xs text-muted-foreground">{compatibility.pasteInstructions}</p>
                 {compatibility.caveats?.map((caveat) => <p key={caveat} className="mt-2 text-xs text-amber-300/90">Note: {caveat}</p>)}
-                <pre className="my-4 max-h-36 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/60 p-3 text-xs text-foreground/80">{item.template}</pre>
+                <pre tabIndex={0} className="my-4 max-h-36 overflow-auto whitespace-pre-wrap rounded-lg bg-secondary/60 p-3 text-xs text-foreground/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{item.template}</pre>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" onClick={() => copyRaw(item)}><Copy className="h-3.5 w-3.5" /> Copy raw template</Button>
                   <Button size="sm" variant="outline" asChild><Link to={`/tools?tab=prompts&template=${encodeURIComponent(item.id)}`}>Open in Builder</Link></Button>
