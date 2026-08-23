@@ -3,12 +3,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
 const V1_FIXTURE = JSON.parse(
-  fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "fixtures/v1-card.json"), "utf-8"),
+  fs.readFileSync(path.resolve(__dirname, "fixtures/v1-card.json"), "utf-8"),
 );
 const V2_FIXTURE = JSON.parse(
-  fs.readFileSync(path.resolve(path.dirname(fileURLToPath(import.meta.url)), "fixtures/v2-card.json"), "utf-8"),
+  fs.readFileSync(path.resolve(__dirname, "fixtures/v2-card.json"), "utf-8"),
 );
+const ONE_PX_PNG = path.resolve(__dirname, "fixtures/1x1.png");
 
 async function openCharacterBuilder(page) {
   await page.goto("/tools");
@@ -28,7 +31,8 @@ async function openTextImport(page) {
   await expect(page.getByPlaceholder("Paste character data here...")).toBeVisible();
 }
 
-/* 1. Loading */
+/* ── 1. Loading ── */
+
 test.describe("Character Builder loading", () => {
   test("loads builder with core form and import controls", async ({ page }) => {
     await openCharacterBuilder(page);
@@ -42,7 +46,8 @@ test.describe("Character Builder loading", () => {
   });
 });
 
-/* 2. Invalid / unrecognized input */
+/* ── 2. Invalid / unrecognized input ── */
+
 test.describe("Invalid and unrecognized text import", () => {
   test.beforeEach(async ({ page }) => {
     await openCharacterBuilder(page);
@@ -59,7 +64,7 @@ test.describe("Invalid and unrecognized text import", () => {
     await expect(page.getByPlaceholder("Luna Starweaver")).toHaveValue("");
   });
 
-  test("rejects {foo:bar} JSON", async ({ page }) => {
+  test('rejects {foo:bar} JSON', async ({ page }) => {
     const ta = page.getByPlaceholder("Paste character data here...");
     await ta.fill('{"foo":"bar"}');
     await page.getByRole("button", { name: "Import", exact: true }).click();
@@ -84,7 +89,8 @@ test.describe("Invalid and unrecognized text import", () => {
   });
 });
 
-/* 3. V1 import */
+/* ── 3. V1 import ── */
+
 test.describe("V1 text import", () => {
   test("imports V1 fixture and shows upgrade notice", async ({ page }) => {
     await openCharacterBuilder(page);
@@ -96,12 +102,15 @@ test.describe("V1 text import", () => {
 
     await expect(page.getByText("V1 card loaded").first()).toBeVisible();
     await expect(page.getByPlaceholder("Luna Starweaver")).toHaveValue("QA V1 Card");
-    await expect(page.getByPlaceholder(/mysterious sorceress/i)).toHaveValue("Synthetic QA fixture for E2E tests.");
+    await expect(page.getByPlaceholder(/mysterious sorceress/i)).toHaveValue(
+      "Synthetic QA fixture for E2E tests.",
+    );
     await expect(page.getByText(/export as V2.*upgraded/i).first()).toBeVisible();
   });
 });
 
-/* 4. V2 import and preservation notices */
+/* ── 4. V2 import and preservation notices ── */
+
 test.describe("V2 text import and preservation notices", () => {
   test("imports V2 fixture with preservation notices", async ({ page }) => {
     await openCharacterBuilder(page);
@@ -118,13 +127,13 @@ test.describe("V2 text import and preservation notices", () => {
   });
 });
 
-/* 5. V3 draft UI */
+/* ── 5. V3 draft UI ── */
+
 test.describe("V3 draft UI", () => {
   test("shows draft labels and asset editor", async ({ page }) => {
     await openCharacterBuilder(page);
 
-    const v3Draft = page.getByText("V3 (draft)");
-    await expect(v3Draft).toBeVisible();
+    await expect(page.getByText("V3 (draft)")).toBeVisible();
 
     // Switch to V3
     await page.locator('button[role="switch"]').click();
@@ -136,18 +145,100 @@ test.describe("V3 draft UI", () => {
     // Add an asset
     await page.getByRole("button", { name: "Add asset declaration" }).click();
 
-    // Check asset fields exist
     await expect(page.getByLabel("Asset 1 type")).toBeVisible();
     await expect(page.getByLabel("Asset 1 name")).toBeVisible();
     await expect(page.getByLabel("Asset 1 URI")).toBeVisible();
     await expect(page.getByLabel("Asset 1 extension")).toBeVisible();
 
     // Export labels mention draft
-    await expect(page.getByRole("button", { name: /Copy V3.*draft.*JSON/ })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Copy V3.*draft.*JSON/ }),
+    ).toBeVisible();
   });
 });
 
-/* 6. Mobile viewport */
+/* ── 6. V2 PNG export / download + re-import ── */
+
+test.describe("V2 PNG export and re-import", () => {
+  test("exports V2 PNG, downloads, and re-imports the card", async ({ page }) => {
+    await openCharacterBuilder(page);
+
+    // Import the V2 fixture via text
+    await openTextImport(page);
+    const ta = page.getByPlaceholder("Paste character data here...");
+    await ta.fill(JSON.stringify(V2_FIXTURE));
+    await page.getByRole("button", { name: "Import", exact: true }).click();
+    await expect(page.getByPlaceholder("Luna Starweaver")).toHaveValue("QA V2 Card");
+
+    // Upload a tiny PNG as the portrait
+    await page.locator('input[type="file"][accept="image/png"]').setInputFiles(ONE_PX_PNG);
+    // The UI shows "0 KB" for our tiny 67-byte PNG
+    await expect(page.getByText(/0\s*KB/)).toBeVisible({ timeout: 3000 });
+
+    // Start waiting for the download *before* clicking Export as PNG
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 10000 }),
+      page.getByRole("button", { name: "Export as PNG" }).click(),
+    ]);
+
+    // Verify download properties
+    expect(download.suggestedFilename()).toMatch(/_v2\.png$/);
+    // Should not contain path separators or control characters
+    const name = download.suggestedFilename();
+    for (const ch of name) {
+      const cc = ch.charCodeAt(0);
+      expect(cc).toBeGreaterThan(0x1f);
+      expect(["<", ">", ":", '"', "/", "\\", "|", "?", "*"].includes(ch)).toBe(false);
+    }
+
+    const downloadBuf = await download.createReadStream();
+    if (!downloadBuf) throw new Error("Download stream returned null");
+    const chunks: Buffer[] = [];
+    for await (const chunk of downloadBuf) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    const fileBytes = Buffer.concat(chunks);
+    expect(fileBytes.length).toBeGreaterThan(50);
+
+    // Must start with PNG signature
+    const sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+    expect(fileBytes.subarray(0, 8)).toEqual(sig);
+
+    // Now re-import the downloaded PNG via the file-import input
+    const downloadPath = path.resolve(__dirname, "..", "test-results", "reimport-test.png");
+    fs.writeFileSync(downloadPath, fileBytes);
+
+    await page
+      .locator('input[type="file"][accept=".json,.png,.txt,.yaml,.yml"]')
+      .setInputFiles(downloadPath);
+
+    // Should recognise it as an embedded card
+    await expect(page.getByText("Imported as V2")).toBeVisible({ timeout: 5000 });
+    await expect(page.getByPlaceholder("Luna Starweaver")).toHaveValue("QA V2 Card");
+    await expect(page.getByText(/character.book.*preserved/i)).toBeVisible();
+    await expect(page.getByText(/unsupported field/i)).toBeVisible();
+
+    // Clean up
+    try { fs.unlinkSync(downloadPath); } catch { /* ok */ }
+  });
+
+  test("rejects a PNG with no embedded card", async ({ page }) => {
+    await openCharacterBuilder(page);
+
+    // Import the bare 1x1 PNG as a file (no card embedded)
+    await page
+      .locator('input[type="file"][accept=".json,.png,.txt,.yaml,.yml"]')
+      .setInputFiles(ONE_PX_PNG);
+
+    await expect(page.getByText("No card found").first()).toBeVisible();
+
+    // The existing card (blank) should not be overwritten
+    await expect(page.getByPlaceholder("Luna Starweaver")).toHaveValue("");
+  });
+});
+
+/* ── 7. Mobile viewport ── */
+
 test.describe("Mobile viewport", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
@@ -162,32 +253,11 @@ test.describe("Mobile viewport", () => {
     await ta.fill(JSON.stringify(V2_FIXTURE));
     await page.getByRole("button", { name: "Import", exact: true }).click();
 
-    // Verify notices visible without overflow
     await expect(page.getByText(/character.book.*preserved/i)).toBeVisible();
 
     // Check no element overflows horizontally
     const bodyWidth = await page.evaluate(() => document.body.scrollWidth);
     const windowWidth = await page.evaluate(() => window.innerWidth);
-    expect(bodyWidth).toBeLessThanOrEqual(windowWidth + 2); // small tolerance
-  });
-});
-
-/* 7. Download checks (sanity only — no file-picker automation) */
-test.describe("Export controls", () => {
-  test("download buttons visible with correct labels", async ({ page }) => {
-    await openCharacterBuilder(page);
-
-    // Fill minimal card so export is meaningful
-    await page.getByPlaceholder("Luna Starweaver").fill("Export Test");
-
-    await expect(
-      page.getByRole("button", { name: /Copy V2 JSON/ }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Download JSON" }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Export as PNG" }),
-    ).toBeVisible();
+    expect(bodyWidth).toBeLessThanOrEqual(windowWidth + 2);
   });
 });
