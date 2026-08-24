@@ -1,6 +1,6 @@
 import { Navigation } from "@/components/Navigation";
 import { AgeGate } from "@/components/AgeGate";
-import { useState, useCallback, useMemo, type MouseEvent, type KeyboardEvent } from "react";
+import { useState, useCallback, useMemo, type MouseEvent } from "react";
 import { Link } from "react-router-dom";
 import { chatbots } from "@/data/chatbots";
 import { Sparkles } from "lucide-react";
@@ -39,16 +39,6 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
           if (main) {
             window.history.pushState(null, "", "#main-content");
             main.focus();
-          }
-        }}
-        onKeyDown={(e: KeyboardEvent<HTMLAnchorElement>) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            const main = document.getElementById("main-content");
-            if (main) {
-              window.history.pushState(null, "", "#main-content");
-              main.focus();
-            }
           }
         }}
       >

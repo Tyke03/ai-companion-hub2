@@ -184,54 +184,95 @@ test.describe("local tool keyboard and focus", () => {
 
 test.describe("skip link", () => {
   const skipRoutes = ["/", "/prompts", "/tools", "/compare", "/community", "/docs/sillytavern"];
+
   for (const route of skipRoutes) {
-    test(`skip link transfers focus to main on ${route}`, async ({ page }) => {
+    test(`keyboard Enter activates skip link on ${route}`, async ({ page }) => {
       await bypassAgeGate(page);
       await page.goto(route);
       await expect(page.locator("main#main-content")).toBeVisible();
-      const skipLink = page.getByRole("link", { name: "Skip to main content" });
-      await expect(skipLink).toHaveAttribute("href", "#main-content");
-      const main = page.locator("main#main-content");
-      await expect(main).toHaveCount(1);
 
       // Tab to skip link
       await page.keyboard.press("Tab");
+      const skipLink = page.getByRole("link", { name: "Skip to main content" });
       await expect(skipLink).toBeFocused();
 
-      // Activate skip link via Enter
+      // Activate via keyboard Enter
       await page.keyboard.press("Enter");
 
-      // Focus must be on main immediately and must stay there
-      await expect(main).toBeFocused();
-      const stillMain = await page.evaluate(() => document.activeElement?.id);
-      expect(stillMain).toBe("main-content");
-
-      // URL must include the hash
+      // URL hash must update
       await expect(page).toHaveURL(/.*#main-content/);
 
-      // Next Tab from main must land inside or after main, never in header/nav
+      // Active element must be main#main-content
+      const activeId = await page.evaluate(() => document.activeElement?.id);
+      expect(activeId).toBe("main-content");
+
+      // Focus must persist after async settling
+      await page.waitForTimeout(200);
+      const activeIdAfterDelay = await page.evaluate(() => document.activeElement?.id);
+      expect(activeIdAfterDelay).toBe("main-content");
+
+      // Next Tab must land inside or after main, never in header/nav
       await page.keyboard.press("Tab");
-      const nextFocusInMain = await page.evaluate(() =>
+      const nextInMain = await page.evaluate(() =>
         document.activeElement?.closest("main#main-content") !== null,
       );
-      expect(nextFocusInMain).toBeTruthy();
+      expect(nextInMain).toBeTruthy();
     });
   }
 
-  test("skip link receives first Tab focus, transfers focus to main on activation", async ({ page }) => {
+  test("pointer click activates skip link on /", async ({ page }) => {
+    await bypassAgeGate(page);
+    await page.goto("/");
+    await expect(page.locator("main#main-content")).toBeVisible();
+
+    const skipLink = page.getByRole("link", { name: "Skip to main content" });
+    // Focus first so the link becomes visible (sr-only → visible on focus)
+    await skipLink.focus();
+    await skipLink.click();
+
+    await page.waitForTimeout(100);
+    const activeId = await page.evaluate(() => document.activeElement?.id);
+    const hash = await page.evaluate(() => window.location.hash);
+    expect(activeId).toBe("main-content");
+    expect(hash).toBe("#main-content");
+
+    await page.keyboard.press("Tab");
+    const nextInMain = await page.evaluate(() =>
+      document.activeElement?.closest("main#main-content") !== null,
+    );
+    expect(nextInMain).toBeTruthy();
+  });
+
+  test("Space on focused skip link does not break navigation", async ({ page }) => {
+    await bypassAgeGate(page);
+    await page.goto("/");
+
+    await page.keyboard.press("Tab");
+    const skipLink = page.getByRole("link", { name: "Skip to main content" });
+    await expect(skipLink).toBeFocused();
+
+    // Press Space — native links do not activate on Space
+    await page.keyboard.press("Space");
+
+    // Skip link should still be focused (Space should not navigate)
+    await expect(skipLink).toBeFocused();
+
+    // Hash should NOT have changed
+    const hash = await page.evaluate(() => window.location.hash);
+    expect(hash).not.toBe("#main-content");
+
+    // Subsequent Enter should still work
+    await page.keyboard.press("Enter");
+    const activeId = await page.evaluate(() => document.activeElement?.id);
+    expect(activeId).toBe("main-content");
+  });
+
+  test("skip link receives first Tab focus on page load", async ({ page }) => {
     await bypassAgeGate(page);
     await page.goto("/");
     await page.keyboard.press("Tab");
     const skipLink = page.getByRole("link", { name: "Skip to main content" });
     await expect(skipLink).toBeFocused();
-    await page.keyboard.press("Enter");
-    await expect(page).toHaveURL(/.*#main-content/);
-    const main = page.locator("main#main-content");
-    await expect(main).toBeFocused();
-    // Verify focus persists after async settling
-    await page.waitForTimeout(200);
-    const activeId = await page.evaluate(() => document.activeElement?.id);
-    expect(activeId).toBe("main-content");
   });
 });
 
