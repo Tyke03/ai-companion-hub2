@@ -18,6 +18,16 @@ export type AccessTag = "foss" | "free" | "byok" | "paid";
 /** Character-card spec filter trait (see platformFilterFacts below). */
 export type CardSpec = "v2" | "v3" | "json" | "native";
 
+/** Optional evidence metadata for future editorial review. */
+export interface EvidenceMetadata {
+  /** ISO date string, e.g. "2026-08" */
+  lastVerified?: string;
+  /** Absolute HTTPS source URL */
+  sourceUrl?: string;
+  /** Review status */
+  reviewStatus?: "documented" | "needs-review" | "unverified";
+}
+
 export interface Chatbot {
   name: string;
   slug: string;
@@ -48,6 +58,8 @@ export interface Chatbot {
   cardFormat?: string;
   /** Last verification date, "YYYY-MM" */
   lastVerified: string;
+  /** Optional evidence metadata for editorial review */
+  evidenceMetadata?: EvidenceMetadata;
 }
 
 export const chatbots: Chatbot[] = [
