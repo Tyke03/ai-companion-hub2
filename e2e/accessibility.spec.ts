@@ -183,19 +183,38 @@ test.describe("local tool keyboard and focus", () => {
 });
 
 test.describe("skip link", () => {
-  const skipRoutes = ["/", "/prompts", "/tools", "/compare", "/community", "/docs"];
+  const skipRoutes = ["/", "/prompts", "/tools", "/compare", "/community", "/docs/sillytavern"];
   for (const route of skipRoutes) {
     test(`skip link transfers focus to main on ${route}`, async ({ page }) => {
       await bypassAgeGate(page);
       await page.goto(route);
+      await expect(page.locator("main#main-content")).toBeVisible();
       const skipLink = page.getByRole("link", { name: "Skip to main content" });
       await expect(skipLink).toHaveAttribute("href", "#main-content");
       const main = page.locator("main#main-content");
       await expect(main).toHaveCount(1);
+
+      // Tab to skip link
       await page.keyboard.press("Tab");
       await expect(skipLink).toBeFocused();
+
+      // Activate skip link via Enter
       await page.keyboard.press("Enter");
+
+      // Focus must be on main immediately and must stay there
       await expect(main).toBeFocused();
+      const stillMain = await page.evaluate(() => document.activeElement?.id);
+      expect(stillMain).toBe("main-content");
+
+      // URL must include the hash
+      await expect(page).toHaveURL(/.*#main-content/);
+
+      // Next Tab from main must land inside or after main, never in header/nav
+      await page.keyboard.press("Tab");
+      const nextFocusInMain = await page.evaluate(() =>
+        document.activeElement?.closest("main#main-content") !== null,
+      );
+      expect(nextFocusInMain).toBeTruthy();
     });
   }
 
@@ -209,6 +228,10 @@ test.describe("skip link", () => {
     await expect(page).toHaveURL(/.*#main-content/);
     const main = page.locator("main#main-content");
     await expect(main).toBeFocused();
+    // Verify focus persists after async settling
+    await page.waitForTimeout(200);
+    const activeId = await page.evaluate(() => document.activeElement?.id);
+    expect(activeId).toBe("main-content");
   });
 });
 
