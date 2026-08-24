@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
+import { EvidenceMetadataDisplay } from "@/components/EvidenceMetadataDisplay";
 import { platformDocs } from "@/data/documentation";
 import { chatbots, categoryLabels, contentLevelLabels } from "@/data/chatbots";
 import { useParams, Link } from "react-router-dom";
@@ -180,6 +181,11 @@ const PlatformDocs = () => {
                   ))}
                 </dl>
               </div>
+              {bot.evidenceMetadata && (
+                <div className="mt-3">
+                  <EvidenceMetadataDisplay metadata={bot.evidenceMetadata} />
+                </div>
+              )}
             </section>
 
             {/* Setup Steps */}
