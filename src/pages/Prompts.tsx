@@ -84,7 +84,7 @@ const Prompts = () => {
           <p className="mt-3 max-w-2xl text-muted-foreground">Verified platform guidance plus Universal plain-text styles, scenarios, and genre starters. Custom templates stay local to your browser.</p>
         </div>
       </header>
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-8">
         <div className="mb-6 flex flex-wrap gap-3">
           <Input aria-label="Search prompt templates" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search prompts, styles, genres..." className="max-w-md bg-secondary" />
           <Button onClick={() => setShowCreator((value) => !value)}><Plus className="h-4 w-4" /> Create Custom Template</Button>

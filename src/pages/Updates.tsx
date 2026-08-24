@@ -17,7 +17,7 @@ const Updates = () => (
         <p className="mt-3 max-w-2xl text-muted-foreground">A small, transparent feed for model releases, directory changes, guide reviews, and service notices.</p>
       </div>
     </header>
-    <main className="container mx-auto max-w-3xl px-4 py-8">
+    <main id="main-content" className="container mx-auto max-w-3xl px-4 py-8">
       <div className="space-y-4">
         {updates.map((update) => (
           <article key={`${update.date}-${update.title}`} className="rounded-xl border border-border bg-card p-5">

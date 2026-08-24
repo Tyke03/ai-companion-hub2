@@ -262,7 +262,7 @@ const Index = () => {
       </div>
 
       {/* Grid */}
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-8">
         {filtered.length === 0 ? (
           <div className="py-20 text-center">
             <p className="text-lg text-muted-foreground">

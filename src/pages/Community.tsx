@@ -69,7 +69,7 @@ const Community = () => {
         <span className={`text-xs font-medium rounded border px-2 py-0.5 ${typeLabels[r.type].color}`}>
           {typeLabels[r.type].label}
         </span>
-        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+        <ExternalLink className="h-3.5 w-3.5 text-muted-foreground group-hover:text-primary transition-colors" aria-hidden="true" focusable="false" />
       </div>
       <h3 className="font-semibold text-foreground mb-1">{r.name}</h3>
       <p className="text-sm text-muted-foreground">{r.description}</p>
@@ -95,7 +95,7 @@ const Community = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 space-y-10">
+      <main id="main-content" className="container mx-auto px-4 py-8 space-y-10">
         {/* Reddit */}
         <section>
           <h2 className="font-display text-xl font-semibold text-foreground mb-4">Reddit Communities</h2>

@@ -27,7 +27,7 @@ const Documentation = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" className="container mx-auto px-4 py-8">
         {/* Documented platforms */}
         <h2 className="font-display text-xl font-semibold text-foreground mb-6">
           Platforms with Full Guides ({documentedPlatforms.length})
@@ -54,12 +54,12 @@ const Documentation = () => {
                 <div className="flex items-center gap-3 text-xs text-muted-foreground">
                   {doc.officialDocs && (
                     <span className="flex items-center gap-1">
-                      <ExternalLink className="h-3 w-3" /> Docs
+                      <ExternalLink className="h-3 w-3" aria-hidden="true" focusable="false" /> Docs
                     </span>
                   )}
                   {doc.github && (
                     <span className="flex items-center gap-1">
-                      <Github className="h-3 w-3" /> GitHub
+                      <Github className="h-3 w-3" aria-hidden="true" focusable="false" /> GitHub
                     </span>
                   )}
                   <span>{doc.features?.length || 0} features</span>
@@ -87,7 +87,7 @@ const Documentation = () => {
               className="inline-flex items-center gap-1 rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground hover:border-primary/30 transition-colors"
             >
               {bot.name}
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="h-3 w-3" aria-hidden="true" focusable="false" />
             </a>
           ))}
         </div>
