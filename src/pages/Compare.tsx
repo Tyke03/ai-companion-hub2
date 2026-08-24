@@ -143,7 +143,7 @@ const Compare = () => {
         </div>
       </header>
 
-      <main id="main-content" className="container mx-auto px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-4 py-8">
         {/* ── Platform selector ──────────────────────────────────────── */}
         <section aria-label="Platform selector" className="rounded-xl border border-border bg-card p-4 sm:p-6">
           <h2 className="font-display text-lg font-semibold text-foreground mb-3">

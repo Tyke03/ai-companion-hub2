@@ -95,7 +95,7 @@ const Community = () => {
         </div>
       </header>
 
-      <main id="main-content" className="container mx-auto px-4 py-8 space-y-10">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-4 py-8 space-y-10">
         {/* Reddit */}
         <section>
           <h2 className="font-display text-xl font-semibold text-foreground mb-4">Reddit Communities</h2>

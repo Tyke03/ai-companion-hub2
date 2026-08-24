@@ -138,7 +138,7 @@ const PlatformDocs = () => {
         </div>
       </header>
 
-      <main id="main-content" className="container mx-auto px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-4 py-8">
         <div className="flex gap-8">
           {/* In-page TOC */}
           <nav className="hidden lg:block w-56 shrink-0" aria-label="On this page">

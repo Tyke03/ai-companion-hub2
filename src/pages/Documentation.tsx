@@ -27,7 +27,7 @@ const Documentation = () => {
         </div>
       </header>
 
-      <main id="main-content" className="container mx-auto px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-4 py-8">
         {/* Documented platforms */}
         <h2 className="font-display text-xl font-semibold text-foreground mb-6">
           Platforms with Full Guides ({documentedPlatforms.length})

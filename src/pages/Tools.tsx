@@ -34,7 +34,7 @@ const Tools = () => {
         </div>
       </header>
 
-      <main id="main-content" className="container mx-auto px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-4 py-8">
         <Tabs defaultValue={defaultTab} className="w-full">
           <TabsList className="w-full justify-start bg-secondary border border-border rounded-lg p-1 mb-8 overflow-x-auto">
             <TabsTrigger value="consolidator" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-md px-4 py-2 text-sm font-medium">

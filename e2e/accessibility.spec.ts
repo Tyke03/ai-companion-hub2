@@ -185,17 +185,21 @@ test.describe("local tool keyboard and focus", () => {
 test.describe("skip link", () => {
   const skipRoutes = ["/", "/prompts", "/tools", "/compare", "/community", "/docs"];
   for (const route of skipRoutes) {
-    test(`skip link exists and anchors to #main-content on ${route}`, async ({ page }) => {
+    test(`skip link transfers focus to main on ${route}`, async ({ page }) => {
       await bypassAgeGate(page);
       await page.goto(route);
       const skipLink = page.getByRole("link", { name: "Skip to main content" });
       await expect(skipLink).toHaveAttribute("href", "#main-content");
       const main = page.locator("main#main-content");
       await expect(main).toHaveCount(1);
+      await page.keyboard.press("Tab");
+      await expect(skipLink).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(main).toBeFocused();
     });
   }
 
-  test("skip link receives first Tab focus and activates correctly", async ({ page }) => {
+  test("skip link receives first Tab focus, transfers focus to main on activation", async ({ page }) => {
     await bypassAgeGate(page);
     await page.goto("/");
     await page.keyboard.press("Tab");
@@ -203,6 +207,8 @@ test.describe("skip link", () => {
     await expect(skipLink).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(page).toHaveURL(/.*#main-content/);
+    const main = page.locator("main#main-content");
+    await expect(main).toBeFocused();
   });
 });
 
