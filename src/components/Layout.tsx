@@ -1,6 +1,6 @@
 import { Navigation } from "@/components/Navigation";
 import { AgeGate } from "@/components/AgeGate";
-import { useState, useCallback, useMemo, type MouseEvent } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { chatbots } from "@/data/chatbots";
 import { Sparkles } from "lucide-react";
@@ -33,14 +33,6 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:font-semibold focus:shadow-lg focus:outline-none"
-        onClick={(e: MouseEvent<HTMLAnchorElement>) => {
-          e.preventDefault();
-          const main = document.getElementById("main-content");
-          if (main) {
-            window.history.pushState(null, "", "#main-content");
-            main.focus();
-          }
-        }}
       >
         Skip to main content
       </a>
