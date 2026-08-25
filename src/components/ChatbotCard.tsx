@@ -82,8 +82,9 @@ export const ChatbotCard = ({
             rel="noopener noreferrer"
             className="text-muted-foreground hover:text-primary transition-colors"
             title={`Visit ${bot.name}`}
+            aria-label={`Visit ${bot.name}`}
           >
-            <ExternalLink className="h-4 w-4" />
+            <ExternalLink className="h-4 w-4" aria-hidden="true" focusable="false" />
           </a>
         </div>
       </div>

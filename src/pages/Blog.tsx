@@ -38,7 +38,7 @@ const Blog = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-4 py-8">
         {/* Category filters */}
         <div className="flex flex-wrap gap-2 mb-8">
           {["All", ...blogCategories].map((cat) => (

@@ -120,7 +120,7 @@ const PlatformDocs = () => {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-lg border border-primary bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/20 transition-colors"
             >
-              <ExternalLink className="h-4 w-4" />
+              <ExternalLink className="h-4 w-4" aria-hidden="true" focusable="false" />
               Visit {doc.name}
             </a>
             {doc.officialDocs && (
@@ -130,7 +130,7 @@ const PlatformDocs = () => {
             )}
             {doc.github && (
               <a href={doc.github} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-secondary px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                <Github className="h-4 w-4" />
+                <Github className="h-4 w-4" aria-hidden="true" focusable="false" />
                 GitHub
               </a>
             )}
@@ -138,7 +138,7 @@ const PlatformDocs = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-4 py-8">
         <div className="flex gap-8">
           {/* In-page TOC */}
           <nav className="hidden lg:block w-56 shrink-0" aria-label="On this page">

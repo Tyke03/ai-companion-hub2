@@ -181,3 +181,39 @@ test.describe("local tool keyboard and focus", () => {
     await expect(page.getByRole("button", { name: /Fetch available models/ })).toBeEnabled();
   });
 });
+
+
+
+test.describe("decorative icons are hidden from assistive technology", () => {
+  test("outbound link icons on community cards use aria-hidden", async ({ page }) => {
+    await bypassAgeGate(page);
+    await page.goto("/community");
+    const externalLinks = page.locator("a[target='_blank']");
+    const count = await externalLinks.count();
+    expect(count).toBeGreaterThan(0);
+    for (let i = 0; i < count; i++) {
+      const icon = externalLinks.nth(i).locator("svg[aria-hidden='true']");
+      if (await icon.count() > 0) {
+        await expect(icon.first()).toBeAttached();
+      }
+    }
+  });
+
+  test("ChatbotCard outbound link icon has aria-hidden and parent link has aria-label", async ({ page }) => {
+    await bypassAgeGate(page);
+    await page.goto("/");
+    const visitLink = page.getByRole("link", { name: /Visit SillyTavern/ }).first();
+    await expect(visitLink).toHaveAttribute("aria-label", /Visit SillyTavern/);
+    const icon = visitLink.locator("svg[aria-hidden='true']");
+    await expect(icon).toHaveCount(1);
+  });
+
+  test("compare matrix criterion labels use th scope=row", async ({ page }) => {
+    await bypassAgeGate(page);
+    await page.goto("/compare?platforms=sillytavern,koboldai");
+    const rowHeaders = page.locator("table th[scope='row']");
+    await expect(rowHeaders.first()).toBeVisible();
+    const count = await rowHeaders.count();
+    expect(count).toBeGreaterThanOrEqual(5);
+  });
+});

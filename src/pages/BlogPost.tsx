@@ -61,7 +61,7 @@ const BlogPost = () => {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
+      <main id="main-content" tabIndex={-1} className="container mx-auto px-4 py-8 max-w-3xl">
         <article className="prose prose-invert prose-sm sm:prose-base max-w-none">
           {post.sections.map((section, i) => (
             <div key={i} className="mb-6">
